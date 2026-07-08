@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "creativegate-api",
+      "runtimeExecutable": "uv",
+      "runtimeArgs": ["run", "creativegate", "serve", "--db", "demo_creativegate.db", "--port", "8321"],
+      "port": 8321
+    }
+  ]
+}

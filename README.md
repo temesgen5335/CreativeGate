@@ -67,8 +67,10 @@ uv run creativegate evaluate --text "Meet your new favorite running shoes. Free 
 # Validity report for a rung — the system volunteers its own limits:
 uv run creativegate calibration performance_predictor
 
-# API:
-uv run creativegate serve   # then POST /evaluate, GET /verdict/{id}, POST /ground-truth, ...
+# API + dashboard:
+uv run creativegate serve   # opens the live dashboard at http://127.0.0.1:8000/
+                            # (ingest, verdict telemetry, calibration harness)
+                            # plus POST /evaluate, GET /verdict/{id}, POST /ground-truth, ...
 ```
 
 **Zero keys required.** With no LLM API key the judge uses a deterministic

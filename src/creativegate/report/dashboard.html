@@ -1,0 +1,801 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CreativeGate</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+/* CreativeGate dashboard — single-file SPA over the real API.
+   Visual language from docs/creative-gate-system-design (hifi handoff);
+   every number rendered comes from a live endpoint, never a mock. */
+* { box-sizing: border-box; margin: 0; }
+:root {
+  --ink: #0F1115; --ink-raised: #1B1E24; --ink-border: #23262D; --ink-border-2: #2A2E36;
+  --ink-log: #17191F; --paper: #F9FAFB; --card: #FFFFFF; --border: #E5E7EB; --border-soft: #F3F4F6;
+  --body: #4B5563; --muted: #6B7280; --faint: #9CA3AF;
+  --green: #059669; --green-dot: #10B981; --green-deep: #047857;
+  --amber: #D97706; --amber-text: #B45309; --amber-dot: #F59E0B;
+  --red: #DC2626; --red-dot: #F87171;
+}
+html, body { padding: 0; }
+body { font-family: 'Space Grotesk', system-ui, sans-serif; color: var(--ink); background: var(--paper); -webkit-font-smoothing: antialiased; }
+a { color: var(--green); text-decoration: none; }
+a:hover { color: var(--green-deep); }
+::selection { background: rgba(5,150,105,0.18); }
+input, button, textarea { font-family: inherit; }
+input:focus, textarea:focus { outline: none; }
+button { cursor: pointer; }
+.mono { font-family: 'JetBrains Mono', monospace; }
+@keyframes cg-marquee { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+@keyframes cg-pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.35; } }
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-thumb { background: #D1D5DB; border-radius: 6px; }
+
+/* ---- app shell ---- */
+#topbar { position: sticky; top: 0; z-index: 50; display: flex; align-items: center; justify-content: space-between; gap: 24px; height: 66px; padding: 0 28px; background: rgba(249,250,251,0.86); backdrop-filter: blur(10px); border-bottom: 1px solid var(--border); }
+#logo { display: flex; align-items: center; gap: 12px; cursor: pointer; }
+#logo .mark { width: 26px; height: 26px; border-radius: 6px; background: var(--ink); display: flex; align-items: center; justify-content: center; }
+#logo .mark div { width: 10px; height: 10px; border: 2px solid var(--green); border-radius: 2px; }
+#logo .word { font-weight: 700; font-size: 17px; letter-spacing: -0.02em; }
+#logo .ver { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--faint); border: 1px solid var(--border); border-radius: 4px; padding: 2px 6px; margin-left: 2px; }
+nav { display: flex; align-items: center; gap: 4px; }
+nav button { border: none; border-radius: 8px; padding: 8px 15px; font-size: 14px; font-weight: 500; background: transparent; color: var(--body); }
+nav button.active { background: var(--ink); color: var(--paper); font-weight: 600; }
+#online { display: flex; align-items: center; gap: 7px; font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--muted); }
+#online .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--green); animation: cg-pulse 2s ease-in-out infinite; }
+#online.down .dot { background: var(--red-dot); animation: none; }
+#avatar { width: 30px; height: 30px; border-radius: 50%; background: var(--ink); color: var(--paper); font-size: 12px; font-weight: 600; display: flex; align-items: center; justify-content: center; }
+
+/* ---- shared primitives ---- */
+.kicker { font-family: 'JetBrains Mono', monospace; font-size: 12px; letter-spacing: 0.14em; color: var(--green); text-transform: uppercase; }
+.card { border: 1px solid var(--border); border-radius: 12px; background: var(--card); }
+.mlabel { font-family: 'JetBrains Mono', monospace; font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--faint); }
+.badge { font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 600; padding: 3px 9px; border-radius: 5px; white-space: nowrap; }
+.badge.pass { background: rgba(5,150,105,0.12); color: #047857; }
+.badge.warn { background: rgba(217,119,6,0.16); color: #B45309; }
+.badge.fail { background: rgba(220,38,38,0.14); color: #DC2626; }
+.sdot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+.sdot.pass { background: var(--green-dot); } .sdot.warn { background: var(--amber-dot); } .sdot.fail { background: var(--red-dot); }
+.empty { padding: 40px 24px; text-align: center; color: var(--muted); font-size: 14px; }
+.empty .mono { font-size: 12px; color: var(--faint); display: block; margin-top: 8px; }
+main { display: none; }
+main.visible { display: block; }
+main.flexcol { display: none; }
+main.flexcol.visible { display: flex; flex-direction: column; align-items: center; }
+main.dashgrid.visible { display: grid; grid-template-columns: 288px 1fr; min-height: calc(100vh - 66px); }
+
+/* ---- home ---- */
+.hero { max-width: 1220px; margin: 0 auto; padding: 92px 28px 56px; display: grid; grid-template-columns: 1.35fr 1fr; gap: 56px; align-items: end; }
+.hero h1 { font-size: 72px; line-height: 0.98; letter-spacing: -0.035em; font-weight: 700; margin: 26px 0; }
+.hero .lede { font-size: 19px; line-height: 1.55; color: var(--body); max-width: 560px; margin-bottom: 34px; }
+.btn-primary { background: var(--ink); color: var(--paper); border: none; border-radius: 9px; padding: 15px 26px; font-size: 15px; font-weight: 600; }
+.btn-ghost { background: transparent; color: var(--ink); border: 1px solid #D1D5DB; border-radius: 9px; padding: 15px 26px; font-size: 15px; font-weight: 600; }
+.speccard { border: 1px solid var(--border); border-radius: 14px; padding: 26px; background: var(--card); }
+.speccard .head { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--faint); text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 18px; }
+.specrow { display: flex; align-items: center; gap: 14px; padding: 13px 0; border-top: 1px solid var(--border-soft); }
+.specrow .n { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--faint); width: 22px; }
+.specrow .sq { width: 8px; height: 8px; border-radius: 2px; background: var(--green); }
+.specrow .name { font-size: 14px; font-weight: 500; flex: 1; }
+.specrow .meta { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--muted); }
+.marquee { border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); padding: 18px 0; overflow: hidden; background: var(--card); }
+.marquee .track { display: flex; width: max-content; animation: cg-marquee 34s linear infinite; font-family: 'JetBrains Mono', monospace; font-size: 13px; color: var(--muted); }
+.marquee .seg { display: flex; gap: 40px; padding-right: 40px; }
+.marquee .sep { color: #D1D5DB; }
+.passes { max-width: 1220px; margin: 0 auto; padding: 84px 28px; }
+.passes .headrow { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 34px; }
+.passes h2 { font-size: 32px; letter-spacing: -0.02em; font-weight: 700; }
+.passes .crumb { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--faint); }
+.stepgrid { display: grid; grid-template-columns: repeat(4, 1fr); border: 1px solid var(--border); border-radius: 14px; overflow: hidden; }
+.stepgrid .cell { padding: 28px 24px 34px; border-right: 1px solid var(--border); }
+.stepgrid .cell:last-child { border-right: none; }
+.stepgrid .n { font-family: 'JetBrains Mono', monospace; font-size: 13px; color: var(--green); margin-bottom: 34px; }
+.stepgrid .t { font-size: 18px; font-weight: 600; margin-bottom: 10px; letter-spacing: -0.01em; }
+.stepgrid .b { font-size: 14px; line-height: 1.5; color: var(--muted); }
+.proof { display: grid; grid-template-columns: repeat(3, 1fr); gap: 48px; margin-top: 64px; }
+.proof .v { font-size: 52px; font-weight: 700; letter-spacing: -0.03em; line-height: 1; }
+.proof .k { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--muted); margin-top: 10px; text-transform: uppercase; letter-spacing: 0.08em; }
+footer { background: var(--ink); color: var(--paper); padding: 72px 28px 40px; margin-top: 40px; }
+footer .inner { max-width: 1220px; margin: 0 auto; }
+footer .cols { display: grid; grid-template-columns: 1.6fr 1fr 1fr 1fr; gap: 40px; padding-bottom: 60px; }
+footer .tag { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.1em; }
+footer .tagline { font-size: 15px; color: var(--faint); max-width: 320px; margin-top: 14px; line-height: 1.55; }
+footer .colh { font-size: 13px; font-weight: 600; margin-bottom: 16px; }
+footer .coli { font-size: 14px; color: var(--faint); padding: 6px 0; cursor: pointer; display: block; }
+footer .mega { font-size: clamp(64px, 15vw, 240px); font-weight: 700; letter-spacing: -0.05em; line-height: 0.86; border-top: 1px solid var(--ink-border); padding-top: 40px; }
+footer .legal { display: flex; justify-content: space-between; align-items: center; margin-top: 32px; font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--muted); }
+
+/* ---- ingest ---- */
+#view-ingest { flex: 1; padding: 76px 28px 60px; }
+.ingest-wrap { width: 100%; max-width: 760px; }
+.ingest-head { text-align: center; margin-bottom: 40px; }
+.ingest-head h1 { font-size: 44px; letter-spacing: -0.03em; font-weight: 700; margin: 16px 0 12px; }
+.ingest-head p { font-size: 16px; color: var(--muted); }
+.pastebar { display: flex; gap: 10px; border: 1px solid #D1D5DB; border-radius: 12px; padding: 8px 8px 8px 18px; background: var(--card); box-shadow: 0 1px 2px rgba(15,17,21,0.04); }
+.pastebar .prompt { align-self: center; font-family: 'JetBrains Mono', monospace; font-size: 13px; color: var(--faint); }
+.pastebar input { flex: 1; border: none; font-size: 15px; padding: 12px 4px; background: transparent; color: var(--ink); }
+.pastebar button { background: var(--green); color: #fff; border: none; border-radius: 9px; padding: 0 24px; font-size: 15px; font-weight: 600; white-space: nowrap; }
+.pastebar button:disabled { opacity: 0.6; cursor: wait; }
+.dropzone { margin-top: 16px; border: 1.5px dashed #D1D5DB; border-radius: 12px; padding: 48px 24px; text-align: center; background: repeating-linear-gradient(135deg, #FCFCFD 0 12px, #F9FAFB 12px 24px); cursor: pointer; }
+.dropzone.over { border-color: var(--green); }
+.dropzone .t { font-size: 15px; font-weight: 600; color: #374151; }
+.dropzone .s { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--faint); margin-top: 8px; }
+.profrow { display: flex; align-items: center; justify-content: space-between; margin-top: 22px; padding: 14px 18px; border: 1px solid var(--border); border-radius: 10px; background: var(--card); }
+.profrow .lab { font-size: 13px; color: var(--muted); }
+.profrow .pill { font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: 500; background: var(--border-soft); border-radius: 6px; padding: 5px 10px; margin-left: 12px; }
+.profrow a { background: transparent; border: none; color: var(--green); font-size: 13px; font-weight: 600; }
+.recent-head { display: flex; align-items: baseline; justify-content: space-between; margin: 46px 0 14px; }
+.recent-head h3 { font-size: 15px; font-weight: 600; }
+.recent-head .hint { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--faint); }
+.recent-list { border: 1px solid var(--border); border-radius: 12px; overflow: hidden; background: var(--card); }
+.recent-row { display: flex; align-items: center; gap: 16px; padding: 15px 18px; border-top: 1px solid var(--border-soft); cursor: pointer; }
+.recent-row:first-child { border-top: none; }
+.recent-row .rid { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--faint); width: 106px; flex: none; }
+.recent-row .asset { font-size: 14px; font-weight: 500; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.recent-row .rtype { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--faint); }
+.recent-row .rtime { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--faint); width: 60px; text-align: right; }
+.ingest-err { margin-top: 14px; font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--red); display: none; }
+
+/* ---- dashboard ---- */
+#rail { background: var(--ink); color: var(--paper); padding: 22px 16px; overflow-y: auto; }
+#rail .railhead { display: flex; align-items: center; justify-content: space-between; padding: 0 6px 16px; font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--muted); }
+#rail .railhead .l { text-transform: uppercase; letter-spacing: 0.1em; }
+.runcard { padding: 12px; border-radius: 9px; cursor: pointer; margin-bottom: 4px; }
+.runcard.active { background: var(--ink-raised); box-shadow: inset 0 0 0 1px var(--ink-border-2); }
+.runcard .top { display: flex; align-items: center; gap: 9px; margin-bottom: 6px; }
+.runcard .rid { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--muted); }
+.runcard .rtime { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--body); margin-left: auto; }
+.runcard .asset { font-size: 13px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.runcard .meta { display: flex; align-items: center; gap: 8px; margin-top: 7px; font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--muted); }
+#dashmain { overflow-y: auto; padding: 26px 30px 60px; }
+.runhead { display: flex; align-items: flex-start; justify-content: space-between; gap: 24px; margin-bottom: 24px; }
+.runhead .idrow { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--faint); }
+.runhead .idrow .tpill { font-size: 11px; border: 1px solid var(--border); border-radius: 4px; padding: 2px 7px; }
+.runhead h1 { font-size: 26px; letter-spacing: -0.02em; font-weight: 700; }
+.verdictbox { display: flex; align-items: center; gap: 10px; padding: 12px 20px; border-radius: 10px; }
+.verdictbox.pass { background: rgba(5,150,105,0.12); color: #047857; }
+.verdictbox.warn { background: rgba(217,119,6,0.16); color: #B45309; }
+.verdictbox.fail { background: rgba(220,38,38,0.14); color: #DC2626; }
+.verdictbox .vdot { width: 10px; height: 10px; border-radius: 50%; }
+.verdictbox .vlab { font-family: 'JetBrains Mono', monospace; font-size: 10px; text-transform: uppercase; letter-spacing: 0.1em; opacity: 0.7; }
+.verdictbox .vval { font-size: 20px; font-weight: 700; line-height: 1; }
+.stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 26px; }
+.stat { border: 1px solid var(--border); border-radius: 12px; padding: 18px 20px; background: var(--card); }
+.stat .num { font-size: 34px; font-weight: 700; letter-spacing: -0.02em; margin-top: 8px; }
+.stat .num .unit { font-size: 18px; color: var(--faint); }
+.stat .sub { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--muted); margin-top: 4px; }
+.stat .sub.up { color: var(--green); }
+.split { display: grid; grid-template-columns: 1.15fr 1fr; gap: 14px; margin-bottom: 26px; }
+.panel { border: 1px solid var(--border); border-radius: 12px; background: var(--card); overflow: hidden; }
+.panel .phead { display: flex; align-items: center; justify-content: space-between; padding: 13px 18px; border-bottom: 1px solid var(--border-soft); }
+.panel .phead .t { font-size: 13px; font-weight: 600; }
+.panel .phead .m { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--faint); }
+.viewport { position: relative; min-height: 220px; background: repeating-linear-gradient(135deg, #F3F4F6 0 14px, #EDEEF1 14px 28px); display: flex; align-items: center; justify-content: center; padding: 28px; }
+.viewport .arttext { font-family: 'JetBrains Mono', monospace; font-size: 14px; line-height: 1.7; color: #374151; background: rgba(255,255,255,0.92); border: 1px solid var(--border); border-radius: 10px; padding: 18px 22px; max-width: 92%; white-space: pre-wrap; }
+.viewport .chip { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--muted); background: rgba(249,250,251,0.7); padding: 4px 10px; border-radius: 6px; }
+.ministats { display: flex; gap: 24px; padding: 14px 18px; flex-wrap: wrap; }
+.ministats .v { font-size: 18px; font-weight: 600; }
+.judgebody { padding: 16px 20px 20px; }
+.jrow { margin-bottom: 16px; }
+.jrow .lab { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 6px; }
+.jrow .k { font-size: 13px; font-weight: 500; }
+.jrow .v { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #374151; }
+.jrow .v .spread { color: var(--faint); }
+.jrow .track { height: 7px; border-radius: 4px; background: var(--border-soft); overflow: hidden; }
+.jrow .fill { height: 100%; border-radius: 4px; }
+.honesty { display: grid; grid-template-columns: 1.15fr 1fr; gap: 14px; margin-bottom: 26px; }
+.validity-card { padding: 16px 20px; }
+.validity-card .vline { font-size: 13px; color: var(--muted); font-style: italic; line-height: 1.55; padding: 8px 0; border-top: 1px solid var(--border-soft); }
+.validity-card .vline:first-of-type { border-top: none; }
+.validity-card .vline b { color: var(--ink); font-style: normal; font-weight: 600; }
+.nexttest { border-left: 3px solid var(--green); padding: 16px 20px; }
+.nexttest .kind { font-size: 16px; font-weight: 700; text-transform: capitalize; }
+.nexttest .cost { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--muted); margin-left: 8px; }
+.nexttest .why { font-size: 13px; color: var(--body); line-height: 1.55; margin-top: 8px; }
+.nexttest .gain { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--faint); margin-top: 8px; }
+.ledger { border: 1px solid var(--border); border-radius: 12px; background: var(--card); padding: 18px 20px 22px; }
+.ledger .lhead { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 16px; flex-wrap: wrap; }
+.ledger .lhead h3 { font-size: 15px; font-weight: 600; }
+.ledger .lhead .hint { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--faint); }
+.ledger .controls { display: flex; align-items: center; gap: 12px; }
+.ledger .controls input { border: 1px solid var(--border); border-radius: 8px; padding: 8px 12px; font-size: 13px; font-family: 'JetBrains Mono', monospace; width: 170px; background: var(--paper); }
+.chip { background: var(--card); color: var(--body); border: 1px solid var(--border); border-radius: 7px; padding: 7px 12px; font-size: 12px; font-weight: 600; font-family: 'JetBrains Mono', monospace; }
+.chip.active { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+.chip .cnt { opacity: 0.6; }
+.drawers { display: flex; flex-direction: column; gap: 8px; }
+.drawer { border-radius: 10px; overflow: hidden; background: var(--ink); color: var(--paper); }
+.drawer .dhead { display: flex; align-items: center; gap: 14px; padding: 14px 18px; cursor: pointer; }
+.drawer .rule { font-size: 14px; font-weight: 500; flex: 1; }
+.drawer .gate { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--muted); }
+.drawer .glyph { font-family: 'JetBrains Mono', monospace; font-size: 18px; color: var(--muted); width: 16px; text-align: center; line-height: 1; }
+.drawer .dbody { padding: 0 18px 18px 40px; display: none; }
+.drawer.open .dbody { display: block; }
+.drawer .detail { font-size: 13px; color: #D1D5DB; line-height: 1.55; margin-bottom: 12px; }
+.drawer .rawlog { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--faint); background: var(--ink-log); border: 1px solid var(--ink-border); border-radius: 8px; padding: 12px 14px; white-space: pre-wrap; overflow-x: auto; }
+
+/* ---- calibration ---- */
+#view-cal { flex: 1; padding: 34px 30px 60px; max-width: 1220px; width: 100%; margin: 0 auto; }
+.calhead { display: flex; align-items: flex-start; justify-content: space-between; gap: 24px; margin-bottom: 8px; }
+.calhead h1 { font-size: 30px; letter-spacing: -0.02em; font-weight: 700; margin-top: 12px; }
+.calhead p { font-size: 15px; color: var(--muted); max-width: 640px; margin-top: 12px; line-height: 1.55; }
+.calstats { display: flex; gap: 10px; }
+.calstat { border: 1px solid var(--border); border-radius: 10px; padding: 12px 16px; background: var(--card); text-align: right; }
+.calstat .v { font-size: 22px; font-weight: 700; letter-spacing: -0.02em; margin-top: 4px; }
+.chartcard { border: 1px solid var(--border); border-radius: 14px; background: var(--card); padding: 22px 22px 10px; margin-top: 24px; }
+.legend { display: flex; align-items: center; gap: 22px; margin-bottom: 6px; padding-left: 6px; font-size: 13px; flex-wrap: wrap; }
+.legend .item { display: flex; align-items: center; gap: 8px; }
+.legend .line { width: 16px; height: 3px; border-radius: 2px; }
+.legend .band { width: 16px; height: 10px; background: rgba(5,150,105,0.14); border-radius: 2px; }
+.tiercard { border: 1px solid var(--border); border-radius: 14px; background: var(--card); margin-top: 16px; overflow: hidden; }
+.tierhead, .tierrow { display: grid; grid-template-columns: 1.4fr 1.2fr 1fr 0.7fr 1fr; padding: 12px 20px; align-items: center; }
+.tierhead { border-bottom: 1px solid var(--border-soft); font-family: 'JetBrains Mono', monospace; font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--faint); }
+.tierrow { border-top: 1px solid var(--border-soft); padding: 15px 20px; }
+.tierrow .rname { font-weight: 600; font-size: 14px; }
+.tierrow .mval { font-family: 'JetBrains Mono', monospace; font-size: 13px; color: #374151; }
+</style>
+</head>
+<body>
+
+<header id="topbar">
+  <div id="logo" onclick="go('home')">
+    <div class="mark"><div></div></div>
+    <span class="word">CreativeGate</span>
+    <span class="ver" id="verpill">v—</span>
+  </div>
+  <nav id="nav"></nav>
+  <div style="display:flex; align-items:center; gap:14px;">
+    <div id="online"><span class="dot"></span><span id="online-label">gate&nbsp;online</span></div>
+    <div id="avatar">OK</div>
+  </div>
+</header>
+
+<!-- ============ HOME ============ -->
+<main id="view-home">
+  <section class="hero">
+    <div>
+      <div class="kicker">// Creative quality gate</div>
+      <h1>Nothing ships until it clears the gate.</h1>
+      <p class="lede">CreativeGate runs every artifact through deterministic checks, a performance predictor trained on real outcomes, and a pairwise judge ensemble — then fuses only the evaluators that have earned trust through calibration.</p>
+      <div style="display:flex; gap:14px; flex-wrap:wrap;">
+        <button class="btn-primary" onclick="go('ingest')">Open ingestion hub &nbsp;→</button>
+        <button class="btn-ghost" onclick="go('dashboard')">View a verdict</button>
+      </div>
+    </div>
+    <div class="speccard">
+      <div class="head" id="spec-profile">EvaluationProfile · —</div>
+      <div id="spec-rows"></div>
+    </div>
+  </section>
+
+  <section class="marquee">
+    <div class="track" id="marquee-track"></div>
+  </section>
+
+  <section class="passes">
+    <div class="headrow">
+      <h2>The gate, in four passes</h2>
+      <span class="crumb">ingest → gate → predict + judge → calibrate</span>
+    </div>
+    <div class="stepgrid">
+      <div class="cell"><div class="n">01 · Ingest</div><div class="t">Paste or POST</div><div class="b">Text copy now; images pass the structural gate. The hub normalizes the artifact and picks a profile.</div></div>
+      <div class="cell"><div class="n">02 · Gate</div><div class="t">Deterministic pass</div><div class="b">Hard rules run first — banned claims, required CTA, length limits, aspect ratio. Free, instant, zero variance.</div></div>
+      <div class="cell"><div class="n">03 · Predict + Judge</div><div class="t">Learned rungs</div><div class="b">A bagged GBM predicts the outcome; a pairwise judge scores win-rate against known-outcome anchors.</div></div>
+      <div class="cell"><div class="n">04 · Calibrate</div><div class="t">Fuse what's earned</div><div class="b">Fusion weight = measured correlation with reality. Uncalibrated rungs contribute evidence, never weight.</div></div>
+    </div>
+    <div class="proof">
+      <div><div class="v" id="proof-verdicts">—</div><div class="k">verdicts stored</div></div>
+      <div><div class="v" id="proof-pred">—</div><div class="k">predictor calibration r</div></div>
+      <div><div class="v" id="proof-judge">—</div><div class="k">judge calibration r</div></div>
+    </div>
+  </section>
+
+  <footer>
+    <div class="inner">
+      <div class="cols">
+        <div>
+          <div class="tag">Deterministic. Calibrated.</div>
+          <p class="tagline">A single quality gate for creative artifacts — evaluate before you spend, and make every cheap evaluator earn its trust.</p>
+        </div>
+        <div>
+          <div class="colh">Product</div>
+          <span class="coli" onclick="go('ingest')">Ingestion hub</span>
+          <span class="coli" onclick="go('dashboard')">Verdict dashboard</span>
+          <span class="coli" onclick="go('calibration')">Calibration harness</span>
+          <a class="coli" href="/docs">API docs</a>
+        </div>
+        <div>
+          <div class="colh">Pipeline</div>
+          <span class="coli" onclick="go('dashboard')">Deterministic gate</span>
+          <span class="coli" onclick="go('dashboard')">Performance predictor</span>
+          <span class="coli" onclick="go('dashboard')">Judge ensemble</span>
+          <span class="coli" onclick="go('calibration')">Fusion weights</span>
+        </div>
+        <div>
+          <div class="colh">Roadmap</div>
+          <span class="coli">Saliency rung · v0.2</span>
+          <span class="coli">MCP server · v0.2</span>
+          <span class="coli">Live-test planner · v0.3</span>
+          <span class="coli">Video modality · v1.0</span>
+        </div>
+      </div>
+      <div class="mega">CreativeGate</div>
+      <div class="legal">
+        <span>CreativeGate v0.1</span>
+        <span>Every fusion weight is a measured correlation.</span>
+      </div>
+    </div>
+  </footer>
+</main>
+
+<!-- ============ INGEST ============ -->
+<main id="view-ingest" class="flexcol">
+  <div class="ingest-wrap">
+    <div class="ingest-head">
+      <div class="kicker">// Ingestion hub</div>
+      <h1>Drop an artifact. Get a verdict.</h1>
+      <p>Paste creative copy to run it through the funnel with the default profile.</p>
+    </div>
+    <div class="pastebar">
+      <span class="prompt">›</span>
+      <input id="paste" placeholder="Meet your new favorite running shoes. Free shipping included. Shop now." />
+      <button id="runbtn" onclick="runGate()">Run gate →</button>
+    </div>
+    <div class="ingest-err" id="ingest-err"></div>
+    <div class="dropzone" id="dropzone">
+      <div class="t">Drag &amp; drop a text creative</div>
+      <div class="s">.txt only for now&nbsp;&nbsp;·&nbsp;&nbsp;images gate-only via API&nbsp;&nbsp;·&nbsp;&nbsp;video planned v1.0</div>
+    </div>
+    <div class="profrow">
+      <div><span class="lab">Evaluation profile</span><span class="pill" id="profile-pill">—</span></div>
+      <a href="/profiles">View profiles</a>
+    </div>
+    <div class="recent-head">
+      <h3>Recent runs</h3>
+      <span class="hint" id="recent-hint">from this gate's database</span>
+    </div>
+    <div class="recent-list" id="recent-list"></div>
+  </div>
+</main>
+
+<!-- ============ DASHBOARD ============ -->
+<main id="view-dashboard" class="dashgrid">
+  <aside id="rail">
+    <div class="railhead"><span class="l">Funnel runs</span><span id="runcount">0</span></div>
+    <div id="runcards"></div>
+  </aside>
+  <section id="dashmain"></section>
+</main>
+
+<!-- ============ CALIBRATION ============ -->
+<main id="view-cal">
+  <div class="calhead">
+    <div>
+      <div class="kicker">// Calibration harness</div>
+      <h1>How much the gate trusts itself</h1>
+      <p>Every scoring rung's predictions are joined to real outcomes; its fusion weight is the measured Spearman correlation. The chart tracks each rung's correlation across recalibration events — amber guides mark drift alarms, where a rung's weight was automatically cut.</p>
+    </div>
+    <div class="calstats" id="calstats"></div>
+  </div>
+  <div class="chartcard">
+    <div class="legend" id="callegend"></div>
+    <div id="calchart"></div>
+  </div>
+  <div class="tiercard">
+    <div class="tierhead"><span>Rung</span><span>Cell (segment · modality)</span><span>Spearman r</span><span>n</span><span>Status</span></div>
+    <div id="tierrows"></div>
+  </div>
+</main>
+
+<script>
+'use strict';
+/* ---------- state + tiny helpers ---------- */
+const S = { view: 'home', runs: [], selected: 0, filter: 'all', query: '', open: {}, cal: null, profiles: [] };
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const RUNG_LABELS = { deterministic_gate: 'deterministic gate', performance_predictor: 'performance predictor', judge_ensemble: 'judge ensemble', funnel: 'funnel' };
+
+function statusOf(v) {
+  if (v.eliminated) return 'fail';
+  if ((v.flags || []).some(f => f.includes('HUMAN_REVIEW_REQUIRED'))) return 'warn';
+  if ((v.confidence_note || '').includes('DIRECTIONAL ONLY')) return 'warn';
+  if (v.score == null) return 'warn';
+  return 'pass';
+}
+const STATUS_LABEL = { pass: 'PASS', warn: 'WARN', fail: 'FAIL' };
+
+function relTime(iso) {
+  const s = (Date.now() - new Date(iso).getTime()) / 1000;
+  if (s < 90) return Math.max(1, Math.round(s)) + 's';
+  if (s < 5400) return Math.round(s / 60) + 'm';
+  if (s < 172800) return Math.round(s / 3600) + 'h';
+  return Math.round(s / 86400) + 'd';
+}
+
+/* ---------- routing ---------- */
+const VIEWS = { home: 'view-home', ingest: 'view-ingest', dashboard: 'view-dashboard', calibration: 'view-cal' };
+function go(view) {
+  S.view = view;
+  for (const [k, id] of Object.entries(VIEWS)) $(id).classList.toggle('visible', k === view);
+  renderNav();
+  window.scrollTo(0, 0);
+}
+function renderNav() {
+  $('nav').innerHTML = Object.keys(VIEWS).map(k =>
+    `<button class="${S.view === k ? 'active' : ''}" onclick="go('${k}')">${k[0].toUpperCase() + k.slice(1)}</button>`
+  ).join('');
+}
+
+/* ---------- data loading ---------- */
+async function jget(url) {
+  const r = await fetch(url);
+  if (!r.ok) throw new Error(url + ' → ' + r.status);
+  return r.json();
+}
+
+async function loadAll() {
+  try {
+    const h = await jget('/health');
+    $('verpill').textContent = 'v' + h.version;
+    $('online').classList.remove('down');
+    $('online-label').innerHTML = 'gate&nbsp;online';
+  } catch {
+    $('online').classList.add('down');
+    $('online-label').innerHTML = 'gate&nbsp;offline';
+  }
+  try { S.profiles = (await jget('/profiles')).profiles; } catch { S.profiles = []; }
+  try { S.runs = (await jget('/verdicts?limit=50')).verdicts; } catch { S.runs = []; }
+  try { S.cal = await jget('/calibration'); } catch { S.cal = { rungs: {}, total_records: 0 }; }
+  renderHome(); renderIngest(); renderDashboard(); renderCalibration();
+}
+
+/* ---------- home ---------- */
+function latestByCell(records) {
+  const m = {};
+  for (const r of records) m[r.segment + '·' + r.modality] = r; // trail is in insertion order
+  return Object.values(m);
+}
+function renderHome() {
+  const prof = S.profiles[0] || 'default-text-v0.1';
+  $('spec-profile').textContent = 'EvaluationProfile · ' + prof;
+  const rungs = [
+    ['01', 'Deterministic gate', 'free · 0 variance'],
+    ['02', 'Performance predictor', 'GBM · bagged ×5'],
+    ['03', 'Judge ensemble', 'pairwise · ×3 passes'],
+    ['04', 'Calibration-weighted fusion', 'weight = measured r'],
+  ];
+  $('spec-rows').innerHTML = rungs.map(([n, name, meta]) =>
+    `<div class="specrow"><span class="n">${n}</span><span class="sq"></span><span class="name">${name}</span><span class="meta">${meta}</span></div>`
+  ).join('');
+  const tech = ['FastAPI', 'Pydantic', 'Deterministic Gate', 'Pairwise Judge Ensemble', 'Performance Predictor', 'Calibration Harness', 'Keyless Degradation', 'Synthetic World'];
+  const seg = tech.map(t => `<span>${t}</span><span class="sep">/</span>`).join('');
+  $('marquee-track').innerHTML = `<div class="seg">${seg}</div><div class="seg">${seg}</div>`;
+  $('proof-verdicts').textContent = S.runs.length ? String(S.runs.length) + (S.runs.length >= 50 ? '+' : '') : '—';
+  const latest = (rung) => {
+    const recs = (S.cal.rungs[rung] || []);
+    return recs.length ? recs[recs.length - 1].spearman.toFixed(2) : '—';
+  };
+  $('proof-pred').textContent = latest('performance_predictor');
+  $('proof-judge').textContent = latest('judge_ensemble');
+}
+
+/* ---------- ingest ---------- */
+function renderIngest() {
+  $('profile-pill').textContent = (S.profiles[0] || 'default-text-v0.1') + ' · default';
+  const rows = S.runs.slice(0, 5);
+  $('recent-list').innerHTML = rows.length ? rows.map((r, i) => {
+    const v = r.verdict, st = statusOf(v);
+    return `<div class="recent-row" onclick="selectRun(${i}); go('dashboard')">
+      <span class="sdot ${st}"></span>
+      <span class="rid">${esc(v.id)}</span>
+      <span class="asset">${esc(v.artifact_id)}</span>
+      <span class="rtype">${esc((r.artifact && r.artifact.modality || 'text').toUpperCase())}</span>
+      <span class="badge ${st}">${STATUS_LABEL[st]}</span>
+      <span class="rtime">${relTime(v.created_at)}</span>
+    </div>`;
+  }).join('') : `<div class="empty">No runs yet.<span class="mono">seed a database: uv run creativegate demo — or paste copy above</span></div>`;
+}
+
+async function runGate() {
+  const text = $('paste').value.trim();
+  const err = $('ingest-err');
+  err.style.display = 'none';
+  if (!text) { err.textContent = 'paste some creative copy first'; err.style.display = 'block'; return; }
+  const btn = $('runbtn');
+  btn.disabled = true; btn.textContent = 'Running…';
+  try {
+    const job = await (await fetch('/evaluate', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text })
+    })).json();
+    let st;
+    for (let i = 0; i < 60; i++) {
+      st = await jget('/jobs/' + job.job_id);
+      if (st.status !== 'running' && st.status !== 'queued') break;
+      await new Promise(r => setTimeout(r, 400));
+    }
+    if (st.status !== 'done') throw new Error(st.error || 'evaluation did not finish');
+    S.runs = (await jget('/verdicts?limit=50')).verdicts;
+    const idx = S.runs.findIndex(r => r.verdict.id === st.verdict_id);
+    selectRun(Math.max(0, idx));
+    renderIngest(); renderHome();
+    go('dashboard');
+  } catch (e) {
+    err.textContent = String(e.message || e);
+    err.style.display = 'block';
+  } finally {
+    btn.disabled = false; btn.textContent = 'Run gate →';
+  }
+}
+
+const dz = $('dropzone');
+dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('over'); });
+dz.addEventListener('dragleave', () => dz.classList.remove('over'));
+dz.addEventListener('drop', e => {
+  e.preventDefault(); dz.classList.remove('over');
+  const f = e.dataTransfer.files && e.dataTransfer.files[0];
+  if (f && (f.type.startsWith('text') || f.name.endsWith('.txt'))) {
+    f.text().then(t => { $('paste').value = t.trim().slice(0, 2000); });
+  } else {
+    const err = $('ingest-err');
+    err.textContent = 'only .txt creatives can run through the browser today — images via POST /evaluate, video is v1.0';
+    err.style.display = 'block';
+  }
+});
+dz.addEventListener('click', () => $('paste').focus());
+
+/* ---------- dashboard ---------- */
+function selectRun(i) { S.selected = i; S.open = {}; renderDashboard(); }
+
+function renderDashboard() {
+  $('runcount').textContent = S.runs.length;
+  $('runcards').innerHTML = S.runs.map((r, i) => {
+    const v = r.verdict, st = statusOf(v);
+    const score = v.score != null ? 'score ' + Math.round(v.score * 100) : (v.eliminated ? 'eliminated' : 'gate-only');
+    return `<div class="runcard ${i === S.selected ? 'active' : ''}" onclick="selectRun(${i})">
+      <div class="top"><span class="sdot ${st}"></span><span class="rid">${esc(v.id)}</span><span class="rtime">${relTime(v.created_at)}</span></div>
+      <div class="asset">${esc(v.artifact_id)}</div>
+      <div class="meta"><span>${esc((r.artifact && r.artifact.modality || 'text').toUpperCase())}</span><span>·</span><span>${score}</span></div>
+    </div>`;
+  }).join('') || `<div class="empty" style="color:#6B7280">No runs yet.</div>`;
+
+  const run = S.runs[S.selected];
+  if (!run) {
+    $('dashmain').innerHTML = `<div class="empty">No verdicts in this database yet.<span class="mono">uv run creativegate demo --db creativegate.db · then restart the server — or paste copy in the ingestion hub</span></div>`;
+    return;
+  }
+  const v = run.verdict, art = run.artifact, st = statusOf(v);
+
+  /* stat blocks — all from the verdict, no mocks */
+  const scoreNum = v.score != null ? (v.score * 100).toFixed(1) : '—';
+  const bandSub = v.band ? `band ${(v.band[0] * 100).toFixed(0)}–${(v.band[1] * 100).toFixed(0)}` : (v.eliminated ? 'eliminated · not fused' : 'no fused score');
+  const scoring = (v.rung_results || []).filter(r => r.score != null);
+  const calibrated = scoring.filter(r => r.validity && r.validity.calibrated);
+  const bestCal = calibrated.length ? calibrated.reduce((a, b) => (a.validity.correlation >= b.validity.correlation ? a : b)) : null;
+  const calNum = bestCal ? bestCal.validity.correlation.toFixed(2) : '—';
+  const calSub = bestCal ? `Spearman · ${RUNG_LABELS[bestCal.rung] || bestCal.rung} · n=${bestCal.validity.n}` : 'uncalibrated · directional only';
+  const judge = (v.rung_results || []).find(r => r.rung === 'judge_ensemble');
+  const certNum = judge && judge.score != null ? Math.round(judge.confidence * 100) : '—';
+  const certSub = judge ? `pairwise vs anchors · ${esc(judge.provider_fidelity)} fidelity` : 'judge did not run';
+  const rt = v.runtime_ms != null ? (v.runtime_ms >= 1000 ? (v.runtime_ms / 1000).toFixed(2) + 's' : Math.round(v.runtime_ms) + 'ms') : '—';
+
+  /* judge bars from real per-anchor comparisons */
+  const comps = judge ? judge.evidence.filter(e => e.kind === 'comparison') : [];
+  const jbars = comps.map(e => {
+    const pct = Math.round(100 * e.detail.wins / e.detail.passes);
+    const color = pct >= 85 ? 'var(--green)' : pct >= 50 ? 'var(--amber)' : 'var(--red)';
+    return `<div class="jrow">
+      <div class="lab"><span class="k">vs ${esc(e.detail.anchor)}</span><span class="v">${e.detail.wins}/${e.detail.passes} <span class="spread">wins</span></span></div>
+      <div class="track"><div class="fill" style="width:${pct}%; background:${color}"></div></div>
+    </div>`;
+  }).join('');
+
+  /* honesty row: validity + next test */
+  const vlines = scoring.map(r =>
+    `<div class="vline"><b>${RUNG_LABELS[r.rung] || r.rung}</b> — ${esc(r.validity.statement)}</div>`
+  ).join('') || `<div class="vline">No scoring rungs ran — gate evidence only.</div>`;
+  const nt = v.next_test;
+  const ntHtml = nt ? `
+    <div><span class="kind">${esc(nt.kind.replace(/_/g, ' '))}</span>${nt.estimated_cost_usd ? `<span class="cost">est. $${Math.round(nt.estimated_cost_usd)} · planning estimate</span>` : ''}</div>
+    <div class="why">${esc(nt.rationale)}</div>
+    ${nt.expected_gain ? `<div class="gain">${esc(nt.expected_gain)}</div>` : ''}`
+    : `<div class="why">${v.eliminated ? 'Eliminated at the gate — fix the violations before spending on any test.' : 'No recommendation recorded.'}</div>`;
+
+  /* ledger rows from the evidence ledger */
+  const rows = (v.evidence || []).map((e, idx) => {
+    let rst = 'pass', rule;
+    if (e.kind === 'check') { rst = e.detail.passed ? 'pass' : 'fail'; rule = (e.detail.check || 'check').replace(/_/g, ' '); }
+    else if (e.kind === 'flag') { rst = 'warn'; rule = e.summary.length > 64 ? e.summary.slice(0, 64) + '…' : e.summary; }
+    else { rule = e.kind + ' · ' + (RUNG_LABELS[e.source] || e.source); }
+    return { idx, rst, rule, gate: e.source, summary: e.summary, log: JSON.stringify(e.detail || {}, null, 2) };
+  });
+  (v.flags || []).forEach((f, i) => rows.push({
+    idx: 'f' + i, rst: 'warn', rule: f.length > 64 ? f.slice(0, 64) + '…' : f,
+    gate: 'funnel', summary: f, log: '(verdict-level flag)'
+  }));
+  const counts = { all: rows.length, pass: 0, warn: 0, fail: 0 };
+  rows.forEach(r => counts[r.rst]++);
+  const q = S.query.trim().toLowerCase();
+  const filtered = rows.filter(r => (S.filter === 'all' || r.rst === S.filter) && (!q || r.rule.toLowerCase().includes(q) || r.summary.toLowerCase().includes(q)));
+  const drawers = filtered.map(r => {
+    const open = !!S.open[r.idx];
+    return `<div class="drawer ${open ? 'open' : ''}">
+      <div class="dhead" onclick="toggleDrawer('${r.idx}')">
+        <span class="sdot ${r.rst}"></span>
+        <span class="rule">${esc(r.rule)}</span>
+        <span class="gate">${esc(RUNG_LABELS[r.gate] || r.gate)}</span>
+        <span class="badge ${r.rst}">${STATUS_LABEL[r.rst]}</span>
+        <span class="glyph">${open ? '×' : '+'}</span>
+      </div>
+      <div class="dbody">
+        <div class="detail">${esc(r.summary)}</div>
+        <div class="rawlog">${esc(r.log)}</div>
+      </div>
+    </div>`;
+  }).join('') || `<div class="empty" style="background:transparent">no ledger rows match</div>`;
+  const chips = ['all', 'pass', 'warn', 'fail'].map(c =>
+    `<button class="chip ${S.filter === c ? 'active' : ''}" onclick="setFilter('${c}')">${c[0].toUpperCase() + c.slice(1)} <span class="cnt">${counts[c]}</span></button>`
+  ).join('');
+
+  /* artifact viewport — real text, honest placeholder otherwise */
+  const viewport = art && art.text
+    ? `<div class="arttext">${esc(art.text)}</div>`
+    : `<span class="chip">${art ? esc(art.modality) + ' artifact · no text payload stored' : 'artifact payload not stored'}</span>`;
+  const words = art && art.text ? art.text.trim().split(/\s+/).length : null;
+
+  $('dashmain').innerHTML = `
+    <div class="runhead">
+      <div>
+        <div class="idrow">
+          <span>${esc(v.id)}</span>
+          <span class="tpill">${esc((art && art.modality || 'text').toUpperCase())}</span>
+          <span>${esc(v.profile_name)}</span>
+          <span>cfg ${esc(v.config_hash)}</span>
+        </div>
+        <h1>${esc(v.artifact_id)}</h1>
+      </div>
+      <div class="verdictbox ${st}">
+        <span class="vdot sdot ${st}"></span>
+        <div><div class="vlab">Verdict</div><div class="vval">${STATUS_LABEL[st]}${st === 'fail' && v.eliminated_by ? ' · ' + esc(RUNG_LABELS[v.eliminated_by] || v.eliminated_by) : ''}</div></div>
+      </div>
+    </div>
+
+    <div class="stats">
+      <div class="stat"><div class="mlabel">Fused score</div><div class="num">${scoreNum}${v.score != null ? '<span class="unit">/100</span>' : ''}</div><div class="sub">${bandSub}</div></div>
+      <div class="stat"><div class="mlabel">Calibration backing</div><div class="num">${calNum}</div><div class="sub ${bestCal ? 'up' : ''}">${calSub}</div></div>
+      <div class="stat"><div class="mlabel">Ensemble certainty</div><div class="num">${certNum}${certNum !== '—' ? '<span class="unit">%</span>' : ''}</div><div class="sub">${certSub}</div></div>
+      <div class="stat"><div class="mlabel">Runtime</div><div class="num">${rt}</div><div class="sub">wall clock</div></div>
+    </div>
+
+    <div class="split">
+      <div class="panel">
+        <div class="phead"><span class="t">Artifact</span><span class="m">saliency prediction · planned v0.2</span></div>
+        <div class="viewport">${viewport}</div>
+        <div class="ministats">
+          ${words != null ? `<div><div class="mlabel">Words</div><div class="v">${words}</div></div>
+          <div><div class="mlabel">Chars</div><div class="v">${art.text.length}</div></div>` : ''}
+          <div><div class="mlabel">Segment</div><div class="v">${esc(art && art.segment || 'default')}</div></div>
+          <div><div class="mlabel">Seed</div><div class="v">${v.seed}</div></div>
+        </div>
+      </div>
+      <div class="panel">
+        <div class="phead"><span class="t">Judge ensemble</span><span class="m">${judge ? esc(judge.provider_fidelity) + ' fidelity · pairwise' : 'did not run'}</span></div>
+        <div class="judgebody">${jbars || `<div class="empty" style="padding:24px 0">${v.eliminated ? 'eliminated before the judge ran' : 'no pairwise comparisons recorded'}</div>`}</div>
+      </div>
+    </div>
+
+    <div class="honesty">
+      <div class="panel validity-card">
+        <div class="phead" style="padding:0 0 13px; margin-bottom:4px;"><span class="t">Validity — the system's own limits</span><span class="m">framework-stamped</span></div>
+        ${vlines}
+      </div>
+      <div class="panel nexttest">
+        <div class="phead" style="padding:0 0 13px; margin-bottom:4px; border-bottom:1px solid var(--border-soft);"><span class="t">Cheapest next test</span><span class="m">confidence limiter</span></div>
+        ${ntHtml}
+      </div>
+    </div>
+
+    <div class="ledger">
+      <div class="lhead">
+        <div><h3>Evidence ledger</h3><span class="hint">every check, comparison and flag behind this verdict — click to expand the raw log</span></div>
+        <div class="controls">
+          <input id="ledger-q" placeholder="filter rules…" value="${esc(S.query)}" oninput="setQuery(this.value)" />
+          <div style="display:flex; gap:6px;">${chips}</div>
+        </div>
+      </div>
+      <div class="drawers">${drawers}</div>
+    </div>`;
+}
+function toggleDrawer(k) { S.open[k] = !S.open[k]; renderDashboard(); }
+function setFilter(f) { S.filter = f; renderDashboard(); }
+function setQuery(val) {
+  S.query = val;
+  const el = $('ledger-q');
+  const pos = el.selectionStart;
+  renderDashboard();
+  const el2 = $('ledger-q');
+  if (el2) { el2.focus(); el2.setSelectionRange(pos, pos); }
+}
+
+/* ---------- calibration ---------- */
+function renderCalibration() {
+  const rungs = Object.entries(S.cal.rungs).filter(([r]) => r !== 'deterministic_gate');
+  const colors = ['#0F1115', '#059669', '#D97706', '#7C3AED'];
+  const latest = (recs) => recs[recs.length - 1];
+
+  $('calstats').innerHTML = (rungs.length ? rungs.map(([rung, recs]) => {
+    const l = latest(recs);
+    return `<div class="calstat"><div class="mlabel">${esc(RUNG_LABELS[rung] || rung)} r</div><div class="v">${l.spearman.toFixed(2)}</div></div>`;
+  }) : []).concat([
+    `<div class="calstat"><div class="mlabel">Drift alarms</div><div class="v">${rungs.reduce((n, [, recs]) => n + recs.filter(r => r.drift_detected).length, 0)}</div></div>`
+  ]).join('');
+
+  $('callegend').innerHTML = rungs.map(([rung], i) =>
+    `<div class="item"><span class="line" style="background:${colors[i % colors.length]}"></span> ${esc(RUNG_LABELS[rung] || rung)}</div>`
+  ).join('') + (rungs.length >= 2 ? `<div class="item"><span class="band"></span> agreement band</div>` : '') +
+  `<div class="item"><span class="line" style="background:rgba(217,119,6,0.6); height:10px; width:2px;"></span> drift alarm</div>`;
+
+  if (!rungs.length) {
+    $('calchart').innerHTML = `<div class="empty">No calibration records yet — the gate hasn't been shown any real outcomes.<span class="mono">uv run creativegate seed-synthetic · or POST /ground-truth with measured outcomes</span></div>`;
+    $('tierrows').innerHTML = '';
+    return;
+  }
+
+  /* SVG: spearman (y, 0..1) across recalibration events (x) */
+  const W = 960, H = 380, padL = 92, padR = 44, padT = 44, padB = 54;
+  const plotW = W - padL - padR, plotH = H - padT - padB;
+  const maxN = Math.max(...rungs.map(([, recs]) => recs.length));
+  const X = (i) => maxN > 1 ? padL + i * plotW / (maxN - 1) : padL + plotW / 2;
+  const Y = (v) => padT + (1 - Math.max(0, Math.min(1, v))) * plotH;
+  const grid = [1.0, 0.75, 0.5, 0.25, 0.0].map(v =>
+    `<line x1="${padL}" x2="${W - padR}" y1="${Y(v).toFixed(1)}" y2="${Y(v).toFixed(1)}" stroke="#E5E7EB" stroke-width="1"></line>
+     <text x="${padL - 8}" y="${(Y(v) + 4).toFixed(1)}" text-anchor="end" font-size="11" fill="#9CA3AF">r ${v.toFixed(2)}</text>`
+  ).join('');
+  const xlabels = Array.from({ length: maxN }, (_, i) =>
+    `<text x="${X(i).toFixed(1)}" y="${H - 28}" text-anchor="middle" font-size="10" fill="#9CA3AF">R${i + 1}</text>`
+  ).join('');
+  const toPath = (recs) => recs.map((r, i) => (i ? 'L' : 'M') + X(i).toFixed(1) + ' ' + Y(r.spearman).toFixed(1)).join(' ');
+  const lines = rungs.map(([, recs], i) => {
+    if (recs.length === 1) {
+      return `<circle cx="${X(0).toFixed(1)}" cy="${Y(recs[0].spearman).toFixed(1)}" r="5" fill="${colors[i % colors.length]}"></circle>`;
+    }
+    return `<path d="${toPath(recs)}" fill="none" stroke="${colors[i % colors.length]}" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"></path>`;
+  }).join('');
+  let band = '';
+  if (rungs.length >= 2) {
+    const [a, b] = [rungs[0][1], rungs[1][1]];
+    const n = Math.min(a.length, b.length);
+    if (n >= 2) {
+      let d = a.slice(0, n).map((r, i) => (i ? 'L' : 'M') + X(i).toFixed(1) + ' ' + Y(r.spearman).toFixed(1)).join(' ');
+      for (let i = n - 1; i >= 0; i--) d += ' L' + X(i).toFixed(1) + ' ' + Y(b[i].spearman).toFixed(1);
+      band = `<path d="${d} Z" fill="rgba(5,150,105,0.13)" stroke="none"></path>`;
+    }
+  }
+  const driftLines = rungs.flatMap(([, recs]) => recs.map((r, i) => r.drift_detected
+    ? `<line x1="${X(i).toFixed(1)}" x2="${X(i).toFixed(1)}" y1="${padT}" y2="${H - padB}" stroke="rgba(217,119,6,0.5)" stroke-width="1" stroke-dasharray="3 3"></line>` : '')).join('');
+  $('calchart').innerHTML = `<svg viewBox="0 0 ${W} ${H}" style="width:100%; height:auto; display:block; font-family:'JetBrains Mono', monospace;">${grid}${xlabels}${band}${driftLines}${lines}</svg>`;
+
+  /* table: latest record per (rung, segment, modality) */
+  const rows = rungs.flatMap(([rung, recs]) => latestByCell(recs).map(r => {
+    const st = r.drift_detected ? 'warn' : (r.spearman >= 0.1 ? 'pass' : 'fail');
+    const lab = r.drift_detected ? 'DRIFT' : (r.spearman >= 0.1 ? 'WEIGHTED' : 'ZERO WEIGHT');
+    return `<div class="tierrow">
+      <span class="rname">${esc(RUNG_LABELS[rung] || rung)}</span>
+      <span class="mval">${esc(r.segment)} · ${esc(r.modality)}</span>
+      <span class="mval">${r.spearman.toFixed(2)}${r.previous_spearman != null ? ` <span style="color:#9CA3AF">(was ${r.previous_spearman.toFixed(2)})</span>` : ''}</span>
+      <span class="mval">${r.n}</span>
+      <span><span class="badge ${st}">${lab}</span></span>
+    </div>`;
+  }));
+  $('tierrows').innerHTML = rows.join('') || '';
+}
+
+/* ---------- boot ---------- */
+renderNav();
+go('home');
+loadAll();
+$('paste').addEventListener('keydown', e => { if (e.key === 'Enter') runGate(); });
+</script>
+</body>
+</html>
