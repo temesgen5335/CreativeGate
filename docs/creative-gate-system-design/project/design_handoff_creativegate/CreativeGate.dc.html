@@ -1,0 +1,652 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body { font-family: 'Space Grotesk', system-ui, sans-serif; color: #0F1115; background: #F9FAFB; -webkit-font-smoothing: antialiased; }
+  a { color: #059669; text-decoration: none; }
+  a:hover { color: #047857; }
+  ::selection { background: rgba(5,150,105,0.18); }
+  input, button, textarea { font-family: inherit; }
+  input:focus, textarea:focus { outline: none; }
+  @keyframes cg-marquee { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+  @keyframes cg-pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.35; } }
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-thumb { background: #D1D5DB; border-radius: 6px; }
+</style>
+</helmet>
+
+<div style="min-height: 100vh; display: flex; flex-direction: column;">
+
+  <!-- ============ TOP BAR ============ -->
+  <header style="position: sticky; top: 0; z-index: 50; display: flex; align-items: center; justify-content: space-between; gap: 24px; height: 66px; padding: 0 28px; background: rgba(249,250,251,0.86); backdrop-filter: blur(10px); border-bottom: 1px solid #E5E7EB;">
+    <div style="display: flex; align-items: center; gap: 12px; cursor: pointer;" onClick="{{ goHome }}">
+      <div style="width: 26px; height: 26px; border-radius: 6px; background: #0F1115; display: flex; align-items: center; justify-content: center;">
+        <div style="width: 10px; height: 10px; border: 2px solid #059669; border-radius: 2px;"></div>
+      </div>
+      <span style="font-weight: 700; font-size: 17px; letter-spacing: -0.02em;">CreativeGate</span>
+      <span style="font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #9CA3AF; border: 1px solid #E5E7EB; border-radius: 4px; padding: 2px 6px; margin-left: 2px;">v3.2</span>
+    </div>
+    <nav style="display: flex; align-items: center; gap: 4px;">
+      <sc-for list="{{ nav }}" as="item" hint-placeholder-count="4">
+        <button onClick="{{ item.on }}" style="{{ item.style }}">{{ item.label }}</button>
+      </sc-for>
+    </nav>
+    <div style="display: flex; align-items: center; gap: 14px;">
+      <div style="display: flex; align-items: center; gap: 7px; font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #6B7280;">
+        <span style="width: 7px; height: 7px; border-radius: 50%; background: #059669; animation: cg-pulse 2s ease-in-out infinite;"></span>
+        gate&nbsp;online
+      </div>
+      <div style="width: 30px; height: 30px; border-radius: 50%; background: #0F1115; color: #F9FAFB; font-size: 12px; font-weight: 600; display: flex; align-items: center; justify-content: center;">OK</div>
+    </div>
+  </header>
+
+  <!-- ============ HOME / MARKETING ============ -->
+  <sc-if value="{{ isHome }}" hint-placeholder-val="{{ true }}">
+  <main>
+    <!-- hero -->
+    <section style="max-width: 1220px; margin: 0 auto; padding: 92px 28px 56px; display: grid; grid-template-columns: 1.35fr 1fr; gap: 56px; align-items: end;">
+      <div>
+        <div style="font-family: 'JetBrains Mono', monospace; font-size: 12px; letter-spacing: 0.14em; color: #059669; text-transform: uppercase; margin-bottom: 26px;">// Creative quality gate</div>
+        <h1 style="font-size: 72px; line-height: 0.98; letter-spacing: -0.035em; font-weight: 700; margin: 0 0 26px;">Nothing ships until it clears the gate.</h1>
+        <p style="font-size: 19px; line-height: 1.55; color: #4B5563; max-width: 560px; margin: 0 0 34px;">CreativeGate runs every asset through deterministic checks, judge ensembles, and saliency prediction — then calibrates the verdict against real spend before a dollar goes live.</p>
+        <div style="display: flex; gap: 14px; flex-wrap: wrap;">
+          <button onClick="{{ goIngest }}" style="background: #0F1115; color: #F9FAFB; border: none; border-radius: 9px; padding: 15px 26px; font-size: 15px; font-weight: 600; cursor: pointer;">Open ingestion hub &nbsp;→</button>
+          <button onClick="{{ goDash }}" style="background: transparent; color: #0F1115; border: 1px solid #D1D5DB; border-radius: 9px; padding: 15px 26px; font-size: 15px; font-weight: 600; cursor: pointer;">View a sample verdict</button>
+        </div>
+      </div>
+      <!-- micro-border spec card -->
+      <div style="border: 1px solid #E5E7EB; border-radius: 14px; padding: 26px; background: #FFFFFF;">
+        <div style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #9CA3AF; text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 18px;">EvaluationProfile · Broadcast v3</div>
+        <sc-for list="{{ pipeline }}" as="stage" hint-placeholder-count="4">
+          <div style="display: flex; align-items: center; gap: 14px; padding: 13px 0; border-top: 1px solid #F3F4F6;">
+            <span style="font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #9CA3AF; width: 22px;">{{ stage.n }}</span>
+            <span style="width: 8px; height: 8px; border-radius: 2px; background: #059669;"></span>
+            <span style="font-size: 14px; font-weight: 500; flex: 1;">{{ stage.name }}</span>
+            <span style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #6B7280;">{{ stage.meta }}</span>
+          </div>
+        </sc-for>
+      </div>
+    </section>
+
+    <!-- tech marquee -->
+    <sc-if value="{{ showMarquee }}" hint-placeholder-val="{{ true }}">
+    <section style="border-top: 1px solid #E5E7EB; border-bottom: 1px solid #E5E7EB; padding: 18px 0; overflow: hidden; background: #FFFFFF;">
+      <div style="display: flex; width: max-content; animation: cg-marquee 34s linear infinite; font-family: 'JetBrains Mono', monospace; font-size: 13px; color: #6B7280;">
+        <div style="display: flex; gap: 40px; padding-right: 40px;">
+          <span>FastAPI</span><span style="color:#D1D5DB">/</span><span>Pydantic</span><span style="color:#D1D5DB">/</span><span>Gemini Flash</span><span style="color:#D1D5DB">/</span><span>Deterministic Checkers</span><span style="color:#D1D5DB">/</span><span>Judge Ensembles</span><span style="color:#D1D5DB">/</span><span>Saliency Predictor</span><span style="color:#D1D5DB">/</span><span>Spend Calibration</span><span style="color:#D1D5DB">/</span><span>OCR Guardrails</span><span style="color:#D1D5DB">/</span>
+        </div>
+        <div style="display: flex; gap: 40px; padding-right: 40px;">
+          <span>FastAPI</span><span style="color:#D1D5DB">/</span><span>Pydantic</span><span style="color:#D1D5DB">/</span><span>Gemini Flash</span><span style="color:#D1D5DB">/</span><span>Deterministic Checkers</span><span style="color:#D1D5DB">/</span><span>Judge Ensembles</span><span style="color:#D1D5DB">/</span><span>Saliency Predictor</span><span style="color:#D1D5DB">/</span><span>Spend Calibration</span><span style="color:#D1D5DB">/</span><span>OCR Guardrails</span><span style="color:#D1D5DB">/</span>
+        </div>
+      </div>
+    </section>
+    </sc-if>
+
+    <!-- how it works: micro-border cards -->
+    <section style="max-width: 1220px; margin: 0 auto; padding: 84px 28px;">
+      <div style="display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 34px;">
+        <h2 style="font-size: 32px; letter-spacing: -0.02em; font-weight: 700; margin: 0;">The gate, in four passes</h2>
+        <span style="font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #9CA3AF;">ingest → gate → judge → calibrate</span>
+      </div>
+      <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 0; border: 1px solid #E5E7EB; border-radius: 14px; overflow: hidden;">
+        <sc-for list="{{ steps }}" as="s" hint-placeholder-count="4">
+          <div style="padding: 28px 24px 34px; border-right: 1px solid #E5E7EB;">
+            <div style="font-family: 'JetBrains Mono', monospace; font-size: 13px; color: #059669; margin-bottom: 34px;">{{ s.n }}</div>
+            <div style="font-size: 18px; font-weight: 600; margin-bottom: 10px; letter-spacing: -0.01em;">{{ s.title }}</div>
+            <div style="font-size: 14px; line-height: 1.5; color: #6B7280;">{{ s.body }}</div>
+          </div>
+        </sc-for>
+      </div>
+      <!-- proof stats -->
+      <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 48px; margin-top: 64px;">
+        <sc-for list="{{ proof }}" as="p" hint-placeholder-count="3">
+          <div>
+            <div style="font-size: 52px; font-weight: 700; letter-spacing: -0.03em; line-height: 1;">{{ p.v }}</div>
+            <div style="font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #6B7280; margin-top: 10px; text-transform: uppercase; letter-spacing: 0.08em;">{{ p.k }}</div>
+          </div>
+        </sc-for>
+      </div>
+    </section>
+
+    <!-- oversized footer -->
+    <sc-if value="{{ showFooterMega }}" hint-placeholder-val="{{ true }}">
+    <footer style="background: #0F1115; color: #F9FAFB; padding: 72px 28px 40px; margin-top: 40px;">
+      <div style="max-width: 1220px; margin: 0 auto;">
+        <div style="display: grid; grid-template-columns: 1.6fr 1fr 1fr 1fr; gap: 40px; padding-bottom: 60px;">
+          <div>
+            <div style="font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #6B7280; text-transform: uppercase; letter-spacing: 0.1em;">Deterministic. Calibrated.</div>
+            <p style="font-size: 15px; color: #9CA3AF; max-width: 320px; margin: 14px 0 0; line-height: 1.55;">A single quality gate for every creative surface — from CTV bumpers to display units.</p>
+          </div>
+          <sc-for list="{{ footerCols }}" as="col" hint-placeholder-count="3">
+            <div>
+              <div style="font-size: 13px; font-weight: 600; margin-bottom: 16px; color: #F9FAFB;">{{ col.h }}</div>
+              <sc-for list="{{ col.items }}" as="li" hint-placeholder-count="4">
+                <div style="font-size: 14px; color: #9CA3AF; padding: 6px 0; cursor: pointer;">{{ li }}</div>
+              </sc-for>
+            </div>
+          </sc-for>
+        </div>
+        <div style="font-size: clamp(64px, 15vw, 240px); font-weight: 700; letter-spacing: -0.05em; line-height: 0.86; border-top: 1px solid #23262D; padding-top: 40px;">CreativeGate</div>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 32px; font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #6B7280;">
+          <span>© 2026 CreativeGate Labs</span>
+          <span>All verdicts calibrated against live spend.</span>
+        </div>
+      </div>
+    </footer>
+    </sc-if>
+  </main>
+  </sc-if>
+
+  <!-- ============ INGESTION HUB ============ -->
+  <sc-if value="{{ isIngest }}" hint-placeholder-val="{{ true }}">
+  <main style="flex: 1; display: flex; flex-direction: column; align-items: center; padding: 76px 28px 60px;">
+    <div style="width: 100%; max-width: 760px;">
+      <div style="text-align: center; margin-bottom: 40px;">
+        <div style="font-family: 'JetBrains Mono', monospace; font-size: 12px; letter-spacing: 0.14em; color: #059669; text-transform: uppercase; margin-bottom: 16px;">// Ingestion hub</div>
+        <h1 style="font-size: 44px; letter-spacing: -0.03em; font-weight: 700; margin: 0 0 12px;">Drop an asset. Get a verdict.</h1>
+        <p style="font-size: 16px; color: #6B7280; margin: 0;">Paste an artifact URL or a JSON config link, or drop a file to run it against the default profile.</p>
+      </div>
+
+      <!-- fast paste bar -->
+      <div style="display: flex; gap: 10px; border: 1px solid #D1D5DB; border-radius: 12px; padding: 8px 8px 8px 18px; background: #FFFFFF; box-shadow: 0 1px 2px rgba(15,17,21,0.04);">
+        <span style="align-self: center; font-family: 'JetBrains Mono', monospace; font-size: 13px; color: #9CA3AF;">›</span>
+        <input value="{{ paste }}" onChange="{{ onPaste }}" placeholder="https://cdn.brand.co/creative/hero_16x9.mp4  —  or a JSON config link" style="flex: 1; border: none; font-size: 15px; padding: 12px 4px; background: transparent; color: #0F1115;" />
+        <button onClick="{{ onRun }}" style="background: #059669; color: #FFFFFF; border: none; border-radius: 9px; padding: 0 24px; font-size: 15px; font-weight: 600; cursor: pointer; white-space: nowrap;">Run gate →</button>
+      </div>
+
+      <!-- dropzone -->
+      <div style="margin-top: 16px; border: 1.5px dashed #D1D5DB; border-radius: 12px; padding: 48px 24px; text-align: center; background: repeating-linear-gradient(135deg, #FCFCFD 0 12px, #F9FAFB 12px 24px);">
+        <div style="font-size: 15px; font-weight: 600; color: #374151;">Drag & drop a creative asset</div>
+        <div style="font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #9CA3AF; margin-top: 8px;">.mp4 · .mov · .png · .jpg · .txt&nbsp;&nbsp;·&nbsp;&nbsp;up to 512&nbsp;MB</div>
+      </div>
+
+      <!-- profile row -->
+      <div style="display: flex; align-items: center; justify-content: space-between; margin-top: 22px; padding: 14px 18px; border: 1px solid #E5E7EB; border-radius: 10px; background: #FFFFFF;">
+        <div style="display: flex; align-items: center; gap: 12px;">
+          <span style="font-size: 13px; color: #6B7280;">Evaluation profile</span>
+          <span style="font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: 500; background: #F3F4F6; border-radius: 6px; padding: 5px 10px;">Broadcast v3 · default</span>
+        </div>
+        <button onClick="{{ goDash }}" style="background: transparent; border: none; color: #059669; font-size: 13px; font-weight: 600; cursor: pointer;">Change profile</button>
+      </div>
+
+      <!-- recent runs -->
+      <div style="margin-top: 46px;">
+        <div style="display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 14px;">
+          <h3 style="font-size: 15px; font-weight: 600; margin: 0;">Recent runs</h3>
+          <span style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #9CA3AF;">last 60 min</span>
+        </div>
+        <div style="border: 1px solid #E5E7EB; border-radius: 12px; overflow: hidden; background: #FFFFFF;">
+          <sc-for list="{{ recent }}" as="r" hint-placeholder-count="4">
+            <div onClick="{{ r.open }}" style="display: flex; align-items: center; gap: 16px; padding: 15px 18px; border-top: 1px solid #F3F4F6; cursor: pointer;">
+              <span style="width: 9px; height: 9px; border-radius: 50%; background: {{ r.dotColor }};"></span>
+              <span style="font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #9CA3AF; width: 72px;">{{ r.id }}</span>
+              <span style="font-size: 14px; font-weight: 500; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{ r.asset }}</span>
+              <span style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #9CA3AF;">{{ r.type }}</span>
+              <span style="{{ r.badge }}">{{ r.label }}</span>
+              <span style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #9CA3AF; width: 60px; text-align: right;">{{ r.time }}</span>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+    </div>
+  </main>
+  </sc-if>
+
+  <!-- ============ VERDICT DASHBOARD ============ -->
+  <sc-if value="{{ isDash }}" hint-placeholder-val="{{ true }}">
+  <main style="flex: 1; display: grid; grid-template-columns: 288px 1fr; min-height: 0;">
+    <!-- run list (dark accent) -->
+    <aside style="background: #0F1115; color: #F9FAFB; padding: 22px 16px; overflow-y: auto;">
+      <div style="display: flex; align-items: center; justify-content: space-between; padding: 0 6px 16px;">
+        <span style="font-family: 'JetBrains Mono', monospace; font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; color: #6B7280;">Simulation runs</span>
+        <span style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #6B7280;">{{ runCount }}</span>
+      </div>
+      <sc-for list="{{ runs }}" as="r" hint-placeholder-count="6">
+        <div onClick="{{ r.select }}" style="{{ r.rowStyle }}">
+          <div style="display: flex; align-items: center; gap: 9px; margin-bottom: 6px;">
+            <span style="width: 8px; height: 8px; border-radius: 50%; background: {{ r.dotColor }};"></span>
+            <span style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #6B7280;">{{ r.id }}</span>
+            <span style="font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #4B5563; margin-left: auto;">{{ r.time }}</span>
+          </div>
+          <div style="font-size: 13px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{ r.asset }}</div>
+          <div style="display: flex; align-items: center; gap: 8px; margin-top: 7px;">
+            <span style="font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #6B7280;">{{ r.type }}</span>
+            <span style="font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #6B7280;">·</span>
+            <span style="font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #6B7280;">score {{ r.score }}</span>
+          </div>
+        </div>
+      </sc-for>
+    </aside>
+
+    <!-- main analytics -->
+    <section style="overflow-y: auto; padding: 26px 30px 60px;">
+      <!-- run header -->
+      <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 24px; margin-bottom: 24px;">
+        <div>
+          <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 8px;">
+            <span style="font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #9CA3AF;">{{ sel.id }}</span>
+            <span style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #9CA3AF; border: 1px solid #E5E7EB; border-radius: 4px; padding: 2px 7px;">{{ sel.type }}</span>
+            <span style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #9CA3AF;">{{ sel.profile }}</span>
+          </div>
+          <h1 style="font-size: 26px; letter-spacing: -0.02em; font-weight: 700; margin: 0;">{{ sel.asset }}</h1>
+        </div>
+        <div style="{{ sel.verdictBox }}">
+          <span style="width: 10px; height: 10px; border-radius: 50%; background: {{ sel.dotColor }};"></span>
+          <div>
+            <div style="font-family: 'JetBrains Mono', monospace; font-size: 10px; text-transform: uppercase; letter-spacing: 0.1em; opacity: 0.7;">Verdict</div>
+            <div style="font-size: 20px; font-weight: 700; line-height: 1;">{{ sel.label }}</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- stat blocks -->
+      <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 26px;">
+        <div style="border: 1px solid #E5E7EB; border-radius: 12px; padding: 18px 20px; background: #FFFFFF;">
+          <div style="font-family: 'JetBrains Mono', monospace; font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; color: #9CA3AF;">Simulated Quality Floor</div>
+          <div style="font-size: 34px; font-weight: 700; letter-spacing: -0.02em; margin-top: 8px;">{{ sel.floor }}<span style="font-size: 18px; color: #9CA3AF;">%</span></div>
+          <div style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #059669; margin-top: 4px;">▲ above launch min</div>
+        </div>
+        <div style="border: 1px solid #E5E7EB; border-radius: 12px; padding: 18px 20px; background: #FFFFFF;">
+          <div style="font-family: 'JetBrains Mono', monospace; font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; color: #9CA3AF;">Historical Base Correlation</div>
+          <div style="font-size: 34px; font-weight: 700; letter-spacing: -0.02em; margin-top: 8px;">{{ sel.corr }}</div>
+          <div style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #6B7280; margin-top: 4px;">r · vs live spend</div>
+        </div>
+        <div style="border: 1px solid #E5E7EB; border-radius: 12px; padding: 18px 20px; background: #FFFFFF;">
+          <div style="font-family: 'JetBrains Mono', monospace; font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; color: #9CA3AF;">Ensemble Certainty</div>
+          <div style="font-size: 34px; font-weight: 700; letter-spacing: -0.02em; margin-top: 8px;">{{ sel.cert }}<span style="font-size: 18px; color: #9CA3AF;">%</span></div>
+          <div style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #6B7280; margin-top: 4px;">5-judge agreement</div>
+        </div>
+        <div style="border: 1px solid #E5E7EB; border-radius: 12px; padding: 18px 20px; background: #FFFFFF;">
+          <div style="font-family: 'JetBrains Mono', monospace; font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; color: #9CA3AF;">Runtime</div>
+          <div style="font-size: 34px; font-weight: 700; letter-spacing: -0.02em; margin-top: 8px;">{{ sel.exec }}</div>
+          <div style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #6B7280; margin-top: 4px;">wall clock</div>
+        </div>
+      </div>
+
+      <!-- split: media viewport + judge ensemble -->
+      <div style="display: grid; grid-template-columns: 1.15fr 1fr; gap: 14px; margin-bottom: 26px;">
+        <!-- media + saliency -->
+        <div style="border: 1px solid #E5E7EB; border-radius: 12px; overflow: hidden; background: #FFFFFF;">
+          <div style="display: flex; align-items: center; justify-content: space-between; padding: 13px 18px; border-bottom: 1px solid #F3F4F6;">
+            <span style="font-size: 13px; font-weight: 600;">Saliency prediction</span>
+            <span style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #9CA3AF;">attention model · v4</span>
+          </div>
+          <div style="position: relative; aspect-ratio: 16/9; background: repeating-linear-gradient(135deg, #F3F4F6 0 14px, #EDEEF1 14px 28px); display: flex; align-items: center; justify-content: center;">
+            <div style="position: absolute; top: 16%; left: 12%; width: 34%; height: 44%; border-radius: 50%; background: radial-gradient(circle, rgba(5,150,105,0.5) 0%, rgba(5,150,105,0) 70%);"></div>
+            <div style="position: absolute; top: 44%; left: 58%; width: 26%; height: 34%; border-radius: 50%; background: radial-gradient(circle, rgba(217,119,6,0.42) 0%, rgba(217,119,6,0) 70%);"></div>
+            <div style="position: absolute; bottom: 10%; left: 40%; width: 20%; height: 24%; border-radius: 50%; background: radial-gradient(circle, rgba(5,150,105,0.3) 0%, rgba(5,150,105,0) 70%);"></div>
+            <span style="font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #6B7280; background: rgba(249,250,251,0.7); padding: 4px 10px; border-radius: 6px;">creative asset · 1920×1080</span>
+          </div>
+          <div style="display: flex; gap: 24px; padding: 14px 18px;">
+            <div><div style="font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #9CA3AF; text-transform: uppercase;">Focus hit-rate</div><div style="font-size: 18px; font-weight: 600;">86%</div></div>
+            <div><div style="font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #9CA3AF; text-transform: uppercase;">CTA in first fixation</div><div style="font-size: 18px; font-weight: 600;">Yes</div></div>
+            <div><div style="font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #9CA3AF; text-transform: uppercase;">Clutter index</div><div style="font-size: 18px; font-weight: 600;">0.31</div></div>
+          </div>
+        </div>
+        <!-- judge ensemble -->
+        <div style="border: 1px solid #E5E7EB; border-radius: 12px; background: #FFFFFF; padding: 16px 20px 20px;">
+          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 18px;">
+            <span style="font-size: 13px; font-weight: 600;">Judge ensemble</span>
+            <span style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #9CA3AF;">5 models · Gemini Flash</span>
+          </div>
+          <sc-for list="{{ judges }}" as="j" hint-placeholder-count="5">
+            <div style="margin-bottom: 16px;">
+              <div style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 6px;">
+                <span style="font-size: 13px; font-weight: 500;">{{ j.k }}</span>
+                <span style="font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #374151;">{{ j.v }} <span style="color:#9CA3AF;">±{{ j.spread }}</span></span>
+              </div>
+              <div style="height: 7px; border-radius: 4px; background: #F3F4F6; overflow: hidden;">
+                <div style="height: 100%; border-radius: 4px; background: {{ j.barColor }}; width: {{ j.w }};"></div>
+              </div>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+
+      <!-- deterministic gate ledger -->
+      <div style="border: 1px solid #E5E7EB; border-radius: 12px; background: #FFFFFF; padding: 18px 20px 22px;">
+        <div style="display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 16px; flex-wrap: wrap;">
+          <div>
+            <h3 style="font-size: 15px; font-weight: 600; margin: 0;">Deterministic gate ledger</h3>
+            <span style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #9CA3AF;">click a row to expand the raw log</span>
+          </div>
+          <div style="display: flex; align-items: center; gap: 12px;">
+            <input value="{{ query }}" onChange="{{ onQuery }}" placeholder="filter rules…" style="border: 1px solid #E5E7EB; border-radius: 8px; padding: 8px 12px; font-size: 13px; font-family: 'JetBrains Mono', monospace; width: 170px; background: #F9FAFB;" />
+            <div style="display: flex; gap: 6px;">
+              <sc-for list="{{ chips }}" as="c" hint-placeholder-count="4">
+                <button onClick="{{ c.on }}" style="{{ c.style }}">{{ c.label }} <span style="opacity:0.6;">{{ c.count }}</span></button>
+              </sc-for>
+            </div>
+          </div>
+        </div>
+
+        <div style="display: flex; flex-direction: column; gap: 8px;">
+          <sc-for list="{{ ledger }}" as="row" hint-placeholder-count="7">
+            <div style="border-radius: 10px; overflow: hidden; background: #0F1115; color: #F9FAFB;">
+              <div onClick="{{ row.toggle }}" style="display: flex; align-items: center; gap: 14px; padding: 14px 18px; cursor: pointer;">
+                <span style="width: 8px; height: 8px; border-radius: 50%; background: {{ row.dotColor }};"></span>
+                <span style="font-size: 14px; font-weight: 500; flex: 1;">{{ row.rule }}</span>
+                <span style="font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #6B7280;">{{ row.gate }}</span>
+                <span style="{{ row.badge }}">{{ row.status }}</span>
+                <span style="font-family: 'JetBrains Mono', monospace; font-size: 18px; color: #6B7280; width: 16px; text-align: center; line-height: 1;">{{ row.glyph }}</span>
+              </div>
+              <sc-if value="{{ row.open }}" hint-placeholder-val="{{ false }}">
+                <div style="padding: 0 18px 18px 40px;">
+                  <div style="font-size: 13px; color: #D1D5DB; line-height: 1.55; margin-bottom: 12px;">{{ row.detail }}</div>
+                  <div style="font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #9CA3AF; background: #17191F; border: 1px solid #23262D; border-radius: 8px; padding: 12px 14px; white-space: pre-wrap;">{{ row.log }}</div>
+                </div>
+              </sc-if>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+    </section>
+  </main>
+  </sc-if>
+
+  <!-- ============ CALIBRATION HARNESS ============ -->
+  <sc-if value="{{ isCal }}" hint-placeholder-val="{{ true }}">
+  <main style="flex: 1; padding: 34px 30px 60px; max-width: 1220px; width: 100%; margin: 0 auto;">
+    <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 24px; margin-bottom: 8px;">
+      <div>
+        <div style="font-family: 'JetBrains Mono', monospace; font-size: 12px; letter-spacing: 0.14em; color: #059669; text-transform: uppercase; margin-bottom: 12px;">// Calibration harness</div>
+        <h1 style="font-size: 30px; letter-spacing: -0.02em; font-weight: 700; margin: 0;">Cheap simulations vs. real spend</h1>
+        <p style="font-size: 15px; color: #6B7280; max-width: 640px; margin: 12px 0 0; line-height: 1.55;">How closely a $10 simulated evaluation tracks the outcome it would have earned at 10×–1000× the spend. Green bands mean the gate is well-calibrated; amber marks where simulated and live tiers drift apart.</p>
+      </div>
+      <div style="display: flex; gap: 10px;">
+        <sc-for list="{{ calStats }}" as="c" hint-placeholder-count="3">
+          <div style="border: 1px solid #E5E7EB; border-radius: 10px; padding: 12px 16px; background: #FFFFFF; text-align: right;">
+            <div style="font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #9CA3AF; text-transform: uppercase;">{{ c.k }}</div>
+            <div style="font-size: 22px; font-weight: 700; letter-spacing: -0.02em; margin-top: 4px;">{{ c.v }}</div>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+
+    <!-- trajectory chart -->
+    <div style="border: 1px solid #E5E7EB; border-radius: 14px; background: #FFFFFF; padding: 22px 22px 10px; margin-top: 24px;">
+      <div style="display: flex; align-items: center; gap: 22px; margin-bottom: 6px; padding-left: 6px;">
+        <div style="display: flex; align-items: center; gap: 8px; font-size: 13px;"><span style="width: 16px; height: 3px; background: #0F1115; border-radius: 2px;"></span> Live-spend actual</div>
+        <div style="display: flex; align-items: center; gap: 8px; font-size: 13px;"><span style="width: 16px; height: 3px; background: #059669; border-radius: 2px;"></span> Simulated evaluation</div>
+        <div style="display: flex; align-items: center; gap: 8px; font-size: 13px;"><span style="width: 16px; height: 10px; background: rgba(5,150,105,0.14); border-radius: 2px;"></span> Calibration band</div>
+      </div>
+      <svg viewBox="0 0 960 380" style="width: 100%; height: auto; display: block; font-family: 'JetBrains Mono', monospace;">
+        <!-- y grid + tier labels -->
+        <sc-for list="{{ yTiers }}" as="t" hint-placeholder-count="4">
+          <line x1="92" x2="916" y1="{{ t.y }}" y2="{{ t.y }}" stroke="#E5E7EB" strokeWidth="1"></line>
+          <text x="84" y="{{ t.ty }}" textAnchor="end" fontSize="11" fill="#9CA3AF">{{ t.label }}</text>
+        </sc-for>
+        <!-- x labels -->
+        <sc-for list="{{ xLabels }}" as="x" hint-placeholder-count="12">
+          <text x="{{ x.x }}" y="352" textAnchor="middle" fontSize="10" fill="#9CA3AF">{{ x.label }}</text>
+        </sc-for>
+        <!-- calibration band -->
+        <path d="{{ bandPath }}" fill="rgba(5,150,105,0.13)" stroke="none"></path>
+        <!-- divergence markers -->
+        <sc-for list="{{ diverge }}" as="d" hint-placeholder-count="0">
+          <line x1="{{ d.x }}" x2="{{ d.x }}" y1="44" y2="326" stroke="rgba(217,119,6,0.5)" strokeWidth="1" strokeDasharray="3 3"></line>
+        </sc-for>
+        <!-- lines -->
+        <path d="{{ actPath }}" fill="none" stroke="#0F1115" strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round"></path>
+        <path d="{{ simPath }}" fill="none" stroke="#059669" strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round"></path>
+      </svg>
+    </div>
+
+    <!-- tier readout table -->
+    <div style="border: 1px solid #E5E7EB; border-radius: 14px; background: #FFFFFF; margin-top: 16px; overflow: hidden;">
+      <div style="display: grid; grid-template-columns: 1.4fr 1fr 1fr 1fr 1fr; gap: 0; padding: 12px 20px; border-bottom: 1px solid #F3F4F6; font-family: 'JetBrains Mono', monospace; font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; color: #9CA3AF;">
+        <span>Spend tier</span><span>Sim verdict</span><span>Live outcome</span><span>Agreement</span><span>Status</span>
+      </div>
+      <sc-for list="{{ tiers }}" as="t" hint-placeholder-count="4">
+        <div style="display: grid; grid-template-columns: 1.4fr 1fr 1fr 1fr 1fr; gap: 0; padding: 15px 20px; border-top: 1px solid #F3F4F6; align-items: center;">
+          <span style="font-weight: 600; font-size: 14px;">{{ t.tier }}</span>
+          <span style="font-family: 'JetBrains Mono', monospace; font-size: 13px; color: #374151;">{{ t.sim }}</span>
+          <span style="font-family: 'JetBrains Mono', monospace; font-size: 13px; color: #374151;">{{ t.live }}</span>
+          <span style="font-family: 'JetBrains Mono', monospace; font-size: 13px; color: #374151;">{{ t.agree }}</span>
+          <span style="{{ t.badge }}">{{ t.label }}</span>
+        </div>
+      </sc-for>
+    </div>
+  </main>
+  </sc-if>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{
+  &quot;$preview&quot;: { &quot;width&quot;: &quot;100%&quot;, &quot;height&quot;: &quot;100%&quot; },
+  &quot;defaultView&quot;: { &quot;editor&quot;: &quot;enum&quot;, &quot;options&quot;: [&quot;home&quot;, &quot;ingest&quot;, &quot;dashboard&quot;, &quot;calibration&quot;], &quot;default&quot;: &quot;home&quot;, &quot;tsType&quot;: &quot;string&quot;, &quot;section&quot;: &quot;Behavior&quot; },
+  &quot;showMarquee&quot;: { &quot;editor&quot;: &quot;boolean&quot;, &quot;default&quot;: true, &quot;tsType&quot;: &quot;boolean&quot;, &quot;section&quot;: &quot;Marketing&quot; },
+  &quot;showFooterMega&quot;: { &quot;editor&quot;: &quot;boolean&quot;, &quot;default&quot;: true, &quot;tsType&quot;: &quot;boolean&quot;, &quot;section&quot;: &quot;Marketing&quot; }
+}">
+class Component extends DCLogic {
+  state = { view: null, paste: '', filter: 'all', query: '', open: {}, selected: 0 };
+
+  vstyle(s) {
+    if (s === 'pass') return { text: '#047857', bg: 'rgba(5,150,105,0.12)', dot: '#10B981', label: 'PASS' };
+    if (s === 'warn') return { text: '#B45309', bg: 'rgba(217,119,6,0.16)', dot: '#F59E0B', label: 'WARN' };
+    return { text: '#DC2626', bg: 'rgba(220,38,38,0.14)', dot: '#F87171', label: 'FAIL' };
+  }
+
+  RUNS() {
+    return [
+      { id: 'CG-4821', asset: 'summer_launch_hero_16x9.mp4', type: 'VIDEO', profile: 'Broadcast v3', status: 'pass', score: 92, floor: '88.4', corr: '0.94', cert: 96, exec: '2.10s', time: '2m' },
+      { id: 'CG-4820', asset: 'promo_square_v2.png', type: 'IMAGE', profile: 'Social v2', status: 'warn', score: 74, floor: '71.2', corr: '0.89', cert: 91, exec: '0.84s', time: '11m' },
+      { id: 'CG-4819', asset: 'headline_variant_c.txt', type: 'COPY', profile: 'Copy Guardrails', status: 'fail', score: 41, floor: '39.8', corr: '0.77', cert: 88, exec: '0.31s', time: '26m' },
+      { id: 'CG-4818', asset: 'carousel_frame_03.png', type: 'IMAGE', profile: 'Social v2', status: 'pass', score: 85, floor: '82.6', corr: '0.92', cert: 93, exec: '0.79s', time: '44m' },
+      { id: 'CG-4817', asset: 'ctv_bumper_6s.mp4', type: 'VIDEO', profile: 'Broadcast v3', status: 'warn', score: 78, floor: '75.1', corr: '0.90', cert: 90, exec: '1.92s', time: '1h' },
+      { id: 'CG-4816', asset: 'display_300x250_b.png', type: 'IMAGE', profile: 'Display v1', status: 'pass', score: 88, floor: '86.0', corr: '0.93', cert: 95, exec: '0.52s', time: '1h' }
+    ];
+  }
+
+  LEDGER() {
+    return [
+      { rule: 'Brand safe-zone margins', gate: 'deterministic', status: 'pass', detail: 'All logo and legal marks fall within the 5% safe area on every keyframe.', log: 'safe_zone.check → margins=[t:6.2% b:5.8% l:7.1% r:6.9%] · OK' },
+      { rule: 'Aspect ratio lock · 16:9', gate: 'deterministic', status: 'pass', detail: 'Delivered master is an exact 1920×1080 frame.', log: 'ratio=1.77778  target=1.77778  Δ=0.00000  · OK' },
+      { rule: 'Text-to-image ratio ≤ 20%', gate: 'deterministic', status: 'warn', detail: 'OCR text coverage measured at 23.4% — over the social threshold of 20%.', log: 'ocr_area=0.234  threshold=0.200  → FLAG (+0.034)' },
+      { rule: 'Prohibited-term scan', gate: 'deterministic', status: 'pass', detail: 'No blocklist matches across 1,204 extracted tokens.', log: 'blocklist=v11  tokens=1204  matches=[]' },
+      { rule: 'Logo clear-space · 1x', gate: 'deterministic', status: 'pass', detail: 'Minimum clear-space maintained around the primary mark.', log: 'clearspace_px=48  required=40  → OK' },
+      { rule: 'CTA contrast · WCAG AA', gate: 'deterministic', status: 'fail', detail: 'CTA label contrast is 3.11:1 against its plate — below the 4.5:1 minimum.', log: 'fg=#8A8F98  bg=#0F1115  ratio=3.11  min=4.50  → FAIL' },
+      { rule: 'Loudness · -24 LUFS ±2', gate: 'deterministic', status: 'pass', detail: 'Integrated loudness is within broadcast tolerance.', log: 'lufs=-23.4  target=-24.0  tol=±2.0  → OK' }
+    ];
+  }
+
+  renderVals() {
+    const view = this.state.view || this.props.defaultView || 'home';
+    const setView = (v) => this.setState({ view: v });
+    const badge = (r) => ({ background: r.bg, color: r.text, fontFamily: "'JetBrains Mono', monospace", fontSize: '11px', fontWeight: 600, padding: '3px 9px', borderRadius: '5px' });
+
+    const navItems = [['home', 'Home'], ['ingest', 'Ingest'], ['dashboard', 'Dashboard'], ['calibration', 'Calibration']];
+    const nav = navItems.map(([id, label]) => ({
+      label,
+      on: () => setView(id),
+      style: {
+        background: view === id ? '#0F1115' : 'transparent',
+        color: view === id ? '#F9FAFB' : '#4B5563',
+        border: 'none', borderRadius: '8px', padding: '8px 15px',
+        fontSize: '14px', fontWeight: view === id ? 600 : 500, cursor: 'pointer'
+      }
+    }));
+
+    const runs = this.RUNS();
+    const sel0 = runs[this.state.selected] || runs[0];
+    const sv = this.vstyle(sel0.status);
+    const sel = Object.assign({}, sel0, {
+      label: sv.label, dotColor: sv.dot,
+      verdictBox: { background: sv.bg, color: sv.text, display: 'flex', alignItems: 'center', gap: '10px', padding: '12px 20px', borderRadius: '10px' }
+    });
+
+    const runsEnriched = runs.map((r, i) => {
+      const active = i === this.state.selected;
+      const rs = this.vstyle(r.status);
+      return Object.assign({}, r, {
+        dotColor: rs.dot,
+        select: () => this.setState({ selected: i }),
+        rowStyle: {
+          padding: '12px 12px', borderRadius: '9px', cursor: 'pointer', marginBottom: '4px',
+          background: active ? '#1B1E24' : 'transparent',
+          boxShadow: active ? 'inset 0 0 0 1px #2A2E36' : 'none'
+        }
+      });
+    });
+
+    // recent runs (ingest view)
+    const recent = runs.slice(0, 5).map((r, i) => {
+      const rs = this.vstyle(r.status);
+      return Object.assign({}, r, {
+        dotColor: rs.dot, label: rs.label,
+        badge: badge(rs),
+        open: () => this.setState({ selected: i, view: 'dashboard' })
+      });
+    });
+
+    // judges
+    const judgeRaw = [
+      { k: 'Composition', v: 91, spread: 4 },
+      { k: 'Message clarity', v: 83, spread: 9 },
+      { k: 'Emotional resonance', v: 77, spread: 12 },
+      { k: 'Brand fit', v: 94, spread: 3 },
+      { k: 'Saliency alignment', v: 86, spread: 6 }
+    ];
+    const judges = judgeRaw.map(j => ({
+      k: j.k, v: j.v, spread: j.spread, w: j.v + '%',
+      barColor: j.v >= 85 ? '#059669' : (j.v >= 70 ? '#D97706' : '#DC2626')
+    }));
+
+    // ledger with live filter
+    const all = this.LEDGER();
+    const q = this.state.query.trim().toLowerCase();
+    const counts = { all: all.length, pass: 0, warn: 0, fail: 0 };
+    all.forEach(r => { counts[r.status]++; });
+    const filtered = all.filter(r =>
+      (this.state.filter === 'all' || r.status === this.state.filter) &&
+      (q === '' || r.rule.toLowerCase().includes(q))
+    );
+    const ledger = filtered.map((r) => {
+      const key = r.rule;
+      const isOpen = !!this.state.open[key];
+      const rs = this.vstyle(r.status);
+      return Object.assign({}, r, {
+        status: rs.label, dotColor: rs.dot,
+        badge: badge(rs),
+        open: isOpen, glyph: isOpen ? '×' : '+',
+        toggle: () => this.setState(s => ({ open: Object.assign({}, s.open, { [key]: !s.open[key] }) }))
+      });
+    });
+
+    const chipDefs = [['all', 'All'], ['pass', 'Pass'], ['warn', 'Warn'], ['fail', 'Fail']];
+    const chips = chipDefs.map(([id, label]) => {
+      const active = this.state.filter === id;
+      return {
+        label, count: counts[id], on: () => this.setState({ filter: id }),
+        style: {
+          background: active ? '#0F1115' : '#FFFFFF', color: active ? '#F9FAFB' : '#4B5563',
+          border: '1px solid ' + (active ? '#0F1115' : '#E5E7EB'), borderRadius: '7px',
+          padding: '7px 12px', fontSize: '12px', fontWeight: 600, cursor: 'pointer',
+          fontFamily: "'JetBrains Mono', monospace"
+        }
+      };
+    });
+
+    // ---------- calibration chart ----------
+    const W = 960, padL = 92, padR = 44, padT = 44, padB = 54, plotH = 380 - padT - padB;
+    const plotW = W - padL - padR;
+    const sim = [0.16, 0.23, 0.29, 0.35, 0.40, 0.50, 0.55, 0.61, 0.68, 0.76, 0.83, 0.90];
+    const act = [0.13, 0.20, 0.30, 0.33, 0.45, 0.47, 0.59, 0.60, 0.63, 0.80, 0.81, 0.87];
+    const n = sim.length;
+    const X = (i) => padL + i * plotW / (n - 1);
+    const Y = (v) => padT + (1 - v) * plotH;
+    const toPath = (a) => a.map((v, i) => (i ? 'L' : 'M') + X(i).toFixed(1) + ' ' + Y(v).toFixed(1)).join(' ');
+    const simPath = toPath(sim);
+    const actPath = toPath(act);
+    let bandPath = sim.map((v, i) => (i ? 'L' : 'M') + X(i).toFixed(1) + ' ' + Y(v).toFixed(1)).join(' ');
+    for (let i = n - 1; i >= 0; i--) bandPath += ' L' + X(i).toFixed(1) + ' ' + Y(act[i]).toFixed(1);
+    bandPath += ' Z';
+    const diverge = [];
+    for (let i = 0; i < n; i++) { if (Math.abs(sim[i] - act[i]) > 0.055) diverge.push({ x: X(i).toFixed(1) }); }
+
+    const tierDefs = [
+      { v: 1.0, label: '$10k+' }, { v: 0.66, label: '$1,000' },
+      { v: 0.33, label: '$100' }, { v: 0.0, label: '$10' }
+    ];
+    const yTiers = tierDefs.map(t => ({ label: t.label, y: Y(t.v).toFixed(1), ty: (Y(t.v) + 4).toFixed(1) }));
+    const xLabels = Array.from({ length: n }, (_, i) => ({ x: X(i).toFixed(1), label: 'W' + (i + 1) }));
+
+    const tiers = [
+      { tier: '$10 · simulated', sim: 'PASS', live: 'PASS', agree: '0.96', status: 'pass' },
+      { tier: '$100 · early live', sim: 'PASS', live: 'PASS', agree: '0.93', status: 'pass' },
+      { tier: '$1,000 · scaled', sim: 'WARN', live: 'PASS', agree: '0.84', status: 'warn' },
+      { tier: '$10k+ · flagship', sim: 'PASS', live: 'PASS', agree: '0.91', status: 'pass' }
+    ].map(t => {
+      const ts = this.vstyle(t.status);
+      return Object.assign({}, t, { label: ts.label, badge: Object.assign(badge(ts), { justifySelf: 'start' }) });
+    });
+
+    const calStats = [
+      { k: 'Sim↔live r', v: '0.93' },
+      { k: 'Tier coverage', v: '96%' },
+      { k: 'Drift', v: '+2.1%' }
+    ];
+
+    return {
+      // nav + routing
+      nav,
+      goHome: () => setView('home'), goIngest: () => setView('ingest'),
+      goDash: () => setView('dashboard'), goCal: () => setView('calibration'),
+      isHome: view === 'home', isIngest: view === 'ingest', isDash: view === 'dashboard', isCal: view === 'calibration',
+      showMarquee: this.props.showMarquee !== false,
+      showFooterMega: this.props.showFooterMega !== false,
+
+      // home content
+      pipeline: [
+        { n: '01', name: 'Deterministic checkers', meta: '7 rules' },
+        { n: '02', name: 'Judge ensemble', meta: '5 models' },
+        { n: '03', name: 'Saliency predictor', meta: 'attn v4' },
+        { n: '04', name: 'Spend calibration', meta: 'r 0.93' }
+      ],
+      steps: [
+        { n: '01 · Ingest', title: 'Paste or drop', body: 'A URL, a JSON config, or a raw file. The hub normalizes it and picks a profile.' },
+        { n: '02 · Gate', title: 'Deterministic pass', body: 'Hard rules run first — ratio, safe-zone, contrast, loudness, prohibited terms.' },
+        { n: '03 · Judge', title: 'Ensemble + saliency', body: 'Five judges score composition and message; the attention model checks focus.' },
+        { n: '04 · Calibrate', title: 'Verdict vs. spend', body: 'The score is calibrated against historical live-spend outcomes before it ships.' }
+      ],
+      proof: [
+        { v: '1.2M', k: 'assets gated' },
+        { v: '94%', k: 'mean ensemble certainty' },
+        { v: '0.93', k: 'sim ↔ live correlation' }
+      ],
+      footerCols: [
+        { h: 'Product', items: ['Ingestion hub', 'Pipeline builder', 'Verdict dashboard', 'Calibration'] },
+        { h: 'Pipeline', items: ['Deterministic gates', 'Judge ensembles', 'Saliency', 'Profiles'] },
+        { h: 'Company', items: ['Docs', 'Changelog', 'Status', 'Contact'] }
+      ],
+
+      // ingest
+      paste: this.state.paste,
+      onPaste: (e) => this.setState({ paste: e.target.value }),
+      onRun: () => this.setState({ view: 'dashboard' }),
+      recent,
+
+      // dashboard
+      runs: runsEnriched, runCount: runs.length, sel, judges, ledger, chips,
+      query: this.state.query, onQuery: (e) => this.setState({ query: e.target.value }),
+
+      // calibration
+      simPath, actPath, bandPath, diverge, yTiers, xLabels, tiers, calStats
+    };
+  }
+}
+</script>
+</body>
+</html>
