@@ -1,0 +1,16 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+.pytest_cache/
+.coverage
+dist/
+build/
+
+# runtime artifacts
+*.db
+demo_report.html
+verdict.html
+
+# local tooling
+.claude/
