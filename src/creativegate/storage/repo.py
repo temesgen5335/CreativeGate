@@ -63,6 +63,13 @@ CREATE TABLE IF NOT EXISTS ground_truth_sets (
     payload TEXT NOT NULL,
     updated_at TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS artifacts (
+    id TEXT PRIMARY KEY,
+    modality TEXT NOT NULL,
+    text TEXT,
+    segment TEXT NOT NULL,
+    created_at TEXT NOT NULL
+);
 """
 
 
@@ -148,6 +155,13 @@ class Repository:
         ).fetchall()
         return [CalibrationRecord.model_validate_json(r[0]) for r in rows]
 
+    def all_calibrations(self) -> list[CalibrationRecord]:
+        """Full audit trail across every rung, in insertion order."""
+        rows = self._conn.execute(
+            "SELECT payload FROM calibrations ORDER BY id"
+        ).fetchall()
+        return [CalibrationRecord.model_validate_json(r[0]) for r in rows]
+
     # -- verdicts --------------------------------------------------------------
 
     def save_verdict(self, verdict: Verdict) -> None:
@@ -163,6 +177,31 @@ class Repository:
             "SELECT payload FROM verdicts WHERE id=?", (verdict_id,)
         ).fetchone()
         return Verdict.model_validate_json(row[0]) if row else None
+
+    def list_verdicts(self, limit: int = 50) -> list[Verdict]:
+        rows = self._conn.execute(
+            "SELECT payload FROM verdicts ORDER BY created_at DESC LIMIT ?", (limit,)
+        ).fetchall()
+        return [Verdict.model_validate_json(r[0]) for r in rows]
+
+    # -- artifacts (text payloads for dashboard preview) -----------------------
+
+    def save_artifact(self, artifact_id: str, modality: str, text: Optional[str],
+                      segment: str) -> None:
+        self._conn.execute(
+            "INSERT OR REPLACE INTO artifacts VALUES (?,?,?,?,?)",
+            (artifact_id, modality, text, segment,
+             datetime.now(timezone.utc).isoformat()),
+        )
+        self._conn.commit()
+
+    def get_artifact(self, artifact_id: str) -> Optional[dict]:
+        row = self._conn.execute(
+            "SELECT id, modality, text, segment FROM artifacts WHERE id=?", (artifact_id,)
+        ).fetchone()
+        if row is None:
+            return None
+        return {"id": row[0], "modality": row[1], "text": row[2], "segment": row[3]}
 
     # -- ground truth sets ------------------------------------------------------
 

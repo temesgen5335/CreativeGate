@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import os
 import uuid
+from pathlib import Path
 from typing import Any, Optional
 
 from fastapi import BackgroundTasks, FastAPI, HTTPException
@@ -77,6 +78,7 @@ def _run_job(job_id: str, req: EvaluateRequest) -> None:
             id=req.artifact_id, modality=req.modality, text=req.text,
             segment=req.segment, platform=req.platform, metadata=req.metadata,
         )
+        repo.save_artifact(artifact.id, artifact.modality.value, artifact.text, artifact.segment)
         verdict = engine.evaluate(artifact)
         repo.save_verdict(verdict)
         _jobs[job_id] = {"status": "done", "verdict_id": verdict.id}
@@ -98,6 +100,45 @@ def get_job(job_id: str) -> dict:
     if job is None:
         raise HTTPException(404, "Unknown job.")
     return {"job_id": job_id, **job}
+
+
+@app.get("/", response_class=HTMLResponse)
+def dashboard() -> str:
+    """The CreativeGate dashboard SPA (home / ingest / dashboard / calibration)."""
+    page = Path(__file__).parent / "report" / "dashboard.html"
+    return page.read_text()
+
+
+@app.get("/verdicts")
+def list_verdicts(limit: int = 50) -> dict:
+    """Recent verdicts, newest first, with artifact text for preview."""
+    repo = get_repo()
+    out = []
+    for v in repo.list_verdicts(limit=min(limit, 200)):
+        artifact = repo.get_artifact(v.artifact_id)
+        out.append({
+            "verdict": v.model_dump(mode="json"),
+            "artifact": artifact,
+        })
+    return {"verdicts": out}
+
+
+@app.get("/artifact/{artifact_id}")
+def get_artifact(artifact_id: str) -> dict:
+    artifact = get_repo().get_artifact(artifact_id)
+    if artifact is None:
+        raise HTTPException(404, "Unknown artifact.")
+    return artifact
+
+
+@app.get("/calibration")
+def calibration_overview() -> dict:
+    """Full calibration audit trail grouped by rung — drives the harness view."""
+    records = get_repo().all_calibrations()
+    by_rung: dict[str, list[dict]] = {}
+    for r in records:
+        by_rung.setdefault(r.rung, []).append(r.model_dump(mode="json"))
+    return {"rungs": by_rung, "total_records": len(records)}
 
 
 @app.get("/verdict/{verdict_id}")

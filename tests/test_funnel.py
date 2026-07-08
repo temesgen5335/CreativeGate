@@ -177,3 +177,37 @@ class TestAPI:
         import creativegate.api as api_mod
         client = TestClient(api_mod.app)
         assert "default-text-v0.1" in client.get("/profiles").json()["profiles"]
+
+    def test_dashboard_and_listing_endpoints(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("CREATIVEGATE_DB", str(tmp_path / "api4.db"))
+        import creativegate.api as api_mod
+        monkeypatch.setattr(api_mod, "_repo", None)
+        monkeypatch.setattr(api_mod, "_jobs", {})
+        client = TestClient(api_mod.app)
+
+        # The dashboard SPA is served at the root.
+        home = client.get("/")
+        assert home.status_code == 200
+        assert "CreativeGate" in home.text and "Evidence ledger" in home.text
+
+        # Evaluate stores the artifact text; /verdicts returns it for preview.
+        resp = client.post("/evaluate", json={
+            "artifact_id": "dash-test",
+            "text": "Try our meal kits today. Save 30% on your first order.",
+        })
+        job = client.get(f"/jobs/{resp.json()['job_id']}").json()
+        assert job["status"] == "done"
+
+        listing = client.get("/verdicts").json()["verdicts"]
+        assert len(listing) == 1
+        entry = listing[0]
+        assert entry["verdict"]["artifact_id"] == "dash-test"
+        assert entry["verdict"]["runtime_ms"] is not None
+        assert entry["artifact"]["text"].startswith("Try our meal kits")
+
+        art = client.get("/artifact/dash-test").json()
+        assert art["modality"] == "text"
+
+        # Calibration overview: empty trail on a fresh db, grouped shape.
+        overview = client.get("/calibration").json()
+        assert overview == {"rungs": {}, "total_records": 0}

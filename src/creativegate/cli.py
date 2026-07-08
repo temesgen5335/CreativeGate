@@ -54,6 +54,7 @@ def evaluate(
                    "or the predictor/judge will refuse and only the gate will run.")
     engine = FunnelEngine(prof, ground_truth=gt, harness=harness)
     artifact = Artifact(id=artifact_id, modality=Modality.TEXT, text=content, segment=segment)
+    repo.save_artifact(artifact.id, artifact.modality.value, artifact.text, artifact.segment)
     verdict = engine.evaluate(artifact)
     repo.save_verdict(verdict)
 
@@ -197,6 +198,8 @@ def demo(
         f"(see CLI output) — the system re-measured how much to trust itself."
     )
     out.write_text(render_batch_report(verdicts, title="synthetic-world demo", note=note))
+    for a in candidates:
+        repo.save_artifact(a.id, a.modality.value, a.text, a.segment)
     for v in verdicts:
         repo.save_verdict(v)
     typer.echo(f"\nHTML report: {out}")

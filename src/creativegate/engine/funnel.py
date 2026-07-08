@@ -18,6 +18,7 @@ Safety rails enforced here (tested in tests/test_safety_rails.py):
 
 from __future__ import annotations
 
+import time
 import uuid
 from typing import Optional
 
@@ -71,6 +72,7 @@ class FunnelEngine:
         )
 
     def evaluate(self, artifact: Artifact, record_predictions: bool = True) -> Verdict:
+        started = time.perf_counter()
         verdict = Verdict(
             id=f"v-{uuid.uuid4().hex[:12]}",
             artifact_id=artifact.id,
@@ -111,6 +113,7 @@ class FunnelEngine:
                 fails = [e.summary for e in result.evidence
                          if e.kind == "check" and not e.detail.get("passed", True)]
                 verdict.validity_summary = "; ".join(fails) or f"Failed threshold at '{result.rung}'."
+                verdict.runtime_ms = (time.perf_counter() - started) * 1000
                 return verdict
 
         # -- fusion over survivors -------------------------------------------
@@ -144,6 +147,7 @@ class FunnelEngine:
         verdict.next_test = recommend_next_test(
             results, weights, band, self.profile.fusion.get("test_costs")
         )
+        verdict.runtime_ms = (time.perf_counter() - started) * 1000
         return verdict
 
     def _is_known_good(self, artifact: Artifact) -> bool:

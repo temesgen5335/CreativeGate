@@ -17,7 +17,7 @@ from typing import Any, Optional
 
 from pydantic import BaseModel, Field
 
-SCHEMA_VERSION = "0.1.0"
+SCHEMA_VERSION = "0.1.1"
 
 
 def utcnow() -> datetime:
@@ -238,3 +238,4 @@ class Verdict(BaseModel):
     next_test: Optional[NextTest] = None
 
     versions: dict[str, str] = Field(default_factory=dict)  # rung -> version, models, prompts
+    runtime_ms: Optional[float] = None                       # wall clock; display-only, never fused
