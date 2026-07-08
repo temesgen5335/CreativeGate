@@ -1,0 +1,42 @@
+# CreativeGate default text-funnel profile (v0.1).
+# A profile is the declarative definition of a funnel: which rungs run, in
+# what order (within cost tiers), with what thresholds and configs.
+name: default-text-v0.1
+target_metric: ctr
+ground_truth_set: synthetic-starter
+seed: 7
+
+rungs:
+  - name: deterministic_gate
+    enabled: true
+    config:
+      banned_phrases:
+        - guaranteed results
+        - miracle
+        - risk-free
+        - no purchase necessary
+      banned_patterns:
+        - '\b100%\s+(guaranteed|effective)\b'
+      required_elements:
+        - name: cta
+          pattern: '\b(shop|buy|get|try|start|learn more|sign up|order|discover|claim|download|join)\b'
+      max_chars: 400
+      min_words: 4
+
+  - name: performance_predictor
+    enabled: true
+    threshold: 0.15          # normalized score floor to survive
+    config:
+      ensemble_members: 5
+      n_estimators: 150
+
+  - name: judge_ensemble
+    enabled: true
+    config:
+      num_anchors: 5
+      ensemble_passes: 3
+
+fusion:
+  policy: calibration-weighted
+  min_weight_r: 0.1          # calibration Spearman below this carries no weight
+  good_anchor_floor: 0.25    # known-good anchors below this trigger human review
