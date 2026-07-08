@@ -12,5 +12,5 @@ build/
 demo_report.html
 verdict.html
 
-# local tooling
-.claude/
+# local tooling (governance docs in .claude/ ARE committed)
+.claude/settings.local.json
