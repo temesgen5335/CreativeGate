@@ -40,8 +40,12 @@ src/creativegate/
     harness.py      # THE HONESTY ENGINE. Sole source of weights & validity.
     synthetic_world.py # Known outcome physics; generates the starter set
   storage/repo.py   # SQLite behind ~10 methods; Postgres = reimplement these
-  report/html.py    # The single honest verdict/batch report page
-  api.py            # FastAPI: /evaluate (async job), /verdict, /ground-truth,
+  report/html.py    # The single honest verdict/batch report page (static export)
+  report/dashboard.html # The live dashboard SPA (vanilla JS, no build step),
+                    # served at GET /. Design source: docs/creative-gate-system-design.
+                    # Every number is fetched from the API — never hardcode data here.
+  api.py            # FastAPI: / (dashboard), /evaluate (async job), /verdict,
+                    # /verdicts, /artifact, /ground-truth, /calibration,
                     # /calibration/{rung}, /profiles, /health
   cli.py            # evaluate | seed-synthetic | calibration | serve | demo
 configs/default_profile.yaml  # the declarative funnel definition, annotated

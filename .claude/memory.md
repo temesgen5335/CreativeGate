@@ -134,3 +134,35 @@ which before merging.
 **Why:** the reasoning and alternatives rejected.
 **Impact:** files/behaviors affected.
 -->
+
+### 2026-07-08 — D13: Dashboard SPA from the Claude Design handoff
+**Decision:** Implemented the 4-view design (`docs/creative-gate-system-design/`)
+as ONE self-contained vanilla-JS file (`src/creativegate/report/dashboard.html`)
+served by FastAPI at `GET /`. No React/build toolchain.
+**Why:** the codebase has zero frontend infrastructure and the charter says
+"one clean report page + API is the product"; a bundler would be premature
+infrastructure for ~900 lines of UI. Design fidelity kept (tokens, layout,
+interactions), but every number is fetched live — no mocked data ever renders.
+**Design→backend mapping decisions (deviations from the mock, all deliberate):**
+- PASS/WARN/FAIL box: FAIL = eliminated; WARN = directional-only fusion or
+  HUMAN_REVIEW flag or no score; PASS = survived with calibrated fusion.
+- "Judge dimension" bars (Composition etc.) → per-anchor win-rates from the
+  judge's real pairwise comparisons (our judge is pairwise-only per D4).
+- Saliency heatmap card → honest artifact preview labeled "saliency · planned
+  v0.2". Fake heatmaps would violate rules.md §6.
+- "Spend calibration" $10→$10k chart → rung self-trust chart (Spearman per
+  recalibration event from the audit trail) + weight table. We do not and
+  will not track spend (out of scope).
+- Marketing-home proof stats ("1.2M assets gated", "Gemini Flash") → live
+  numbers from /verdicts and /calibration; real tech list.
+- Added two cards the design lacked: validity statements and cheapest-next-test
+  (the product's money features).
+- Dropzone accepts .txt only (video = v1.0; image upload API doesn't exist yet).
+**Backend additions:** `Verdict.runtime_ms` (schema 0.1.0→0.1.1, optional,
+display-only, never fused); repo `artifacts` table + `list_verdicts` +
+`all_calibrations`; endpoints `GET /` (SPA), `GET /verdicts`,
+`GET /artifact/{id}`, `GET /calibration` (grouped audit trail).
+**Impact:** api.py, cli.py (saves artifacts), schemas.py, storage/repo.py,
+engine/funnel.py, report/dashboard.html, tests (46 now). Verified live against
+the demo db: ingest→evaluate→dashboard round-trip, calibration chart from the
+real audit trail, zero console errors.
