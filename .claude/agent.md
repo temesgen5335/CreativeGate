@@ -57,8 +57,9 @@ src/creativegate/
                     # Every number is fetched from the API — never hardcode data here.
   api.py            # FastAPI: / (dashboard), /evaluate (durable async job),
                     # /jobs, /artifacts (upload), /verdict, /verdicts,
-                    # /artifact, /ground-truth, /calibration,
-                    # /calibration/{rung}, /profiles, /health
+                    # /artifact, /ground-truth (outcomes -> recalibration),
+                    # /ground-truth-sets (bring-your-own corpus),
+                    # /calibration, /calibration/{rung}, /profiles, /health
   cli.py            # evaluate | seed-synthetic | calibration | serve | demo
 configs/default_profile.yaml  # the declarative funnel definition, annotated
 tests/              # test_safety_rails.py is the spine — read it to understand

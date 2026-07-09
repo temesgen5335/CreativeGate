@@ -1,0 +1,118 @@
+{
+  "name": "starter-live",
+  "target_metric": "ctr",
+  "records": [
+    {
+      "artifact_ref": "gt-shoes-hero",
+      "modality": "text",
+      "text": "Meet your new favorite running shoes. Free shipping on your first order. Shop now — sale ends Sunday.",
+      "outcomes": { "ctr": 0.046 },
+      "outcome_quality": "measured",
+      "is_anchor": true
+    },
+    {
+      "artifact_ref": "gt-coffee-sub",
+      "modality": "text",
+      "text": "Your coffee, upgraded. Save 20% on your first subscription box. Start your trial today.",
+      "outcomes": { "ctr": 0.041 },
+      "outcome_quality": "measured",
+      "is_anchor": true
+    },
+    {
+      "artifact_ref": "gt-desk-back",
+      "modality": "text",
+      "text": "The standing desk your back has been asking for. Free assembly included. Order yours today.",
+      "outcomes": { "ctr": 0.038 },
+      "outcome_quality": "measured",
+      "is_anchor": true
+    },
+    {
+      "artifact_ref": "gt-mealkit-half",
+      "modality": "text",
+      "text": "Meal kits with zero food waste. Get your first box half price this week.",
+      "outcomes": { "ctr": 0.030 },
+      "outcome_quality": "measured",
+      "is_anchor": true
+    },
+    {
+      "artifact_ref": "gt-skincare-3step",
+      "modality": "text",
+      "text": "Organic skincare made simple. Discover the three-step routine your skin will thank you for.",
+      "outcomes": { "ctr": 0.027 },
+      "outcome_quality": "measured",
+      "is_anchor": true
+    },
+    {
+      "artifact_ref": "gt-language-commute",
+      "modality": "text",
+      "text": "Language learning that fits your commute. Try ten minutes a day, free for a month.",
+      "outcomes": { "ctr": 0.024 },
+      "outcome_quality": "measured",
+      "is_anchor": true
+    },
+    {
+      "artifact_ref": "gt-headphones-office",
+      "modality": "text",
+      "text": "Noise-canceling headphones built for open offices. Learn more about the quietest seat in the room.",
+      "outcomes": { "ctr": 0.021 },
+      "outcome_quality": "measured",
+      "is_anchor": true
+    },
+    {
+      "artifact_ref": "gt-furniture-catalog",
+      "modality": "text",
+      "text": "Quality furniture at fair prices, delivered flat and built in minutes. Shop the catalog.",
+      "outcomes": { "ctr": 0.016 },
+      "outcome_quality": "measured",
+      "is_anchor": true
+    },
+    {
+      "artifact_ref": "gt-projectware-teams",
+      "modality": "text",
+      "text": "We make project software for teams that hate project software. Sign up for the beta.",
+      "outcomes": { "ctr": 0.013 },
+      "outcome_quality": "measured",
+      "is_anchor": true
+    },
+    {
+      "artifact_ref": "gt-insurance-quote",
+      "modality": "text",
+      "text": "Insurance quotes online in a few minutes. Get a quote.",
+      "outcomes": { "ctr": 0.011 },
+      "outcome_quality": "measured",
+      "is_anchor": true
+    },
+    {
+      "artifact_ref": "gt-budget-app",
+      "modality": "text",
+      "text": "A budgeting app that does the math for you. Download it.",
+      "outcomes": { "ctr": 0.009 },
+      "outcome_quality": "measured",
+      "is_anchor": true
+    },
+    {
+      "artifact_ref": "gt-caps-deal",
+      "modality": "text",
+      "text": "BUY NOW!! BEST DEAL EVER!! Order today before it is gone!!",
+      "outcomes": { "ctr": 0.006 },
+      "outcome_quality": "measured",
+      "is_anchor": true
+    },
+    {
+      "artifact_ref": "gt-savings-shout",
+      "modality": "text",
+      "text": "Act fast! Get huge savings now now now! Buy today!",
+      "outcomes": { "ctr": 0.007 },
+      "outcome_quality": "measured",
+      "is_anchor": true
+    },
+    {
+      "artifact_ref": "gt-click-spam",
+      "modality": "text",
+      "text": "Limited sale! Save big! Click click click! Shop shop shop!",
+      "outcomes": { "ctr": 0.008 },
+      "outcome_quality": "measured",
+      "is_anchor": true
+    }
+  ]
+}

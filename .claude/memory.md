@@ -233,3 +233,23 @@ and the actual Docker image built and exercised end-to-end with a mounted
 volume (health, auth, evaluate→verdict on /data, dashboard served).
 **Impact:** cli.py, Dockerfile, .dockerignore, railway.json, DEPLOY.md,
 README pointer.
+
+### 2026-07-09 — D17: Bring-your-own ground truth via API + live smoketest
+**Decision:** `POST /ground-truth-sets` stores a named corpus (min 2 usable
+records for judge anchors; warns under 10, where the predictor refuses).
+When the profile-named set is absent, `_run_job` falls back to the most
+recently stored set — single-tenant convenience so an uploaded corpus works
+without profile editing; explicit names still win. Shipped
+`examples/ground-truth-example.json` (14 hand-written ads, CTR 0.6%–4.6%,
+graded strong→spammy), `examples/bootstrap_calibration.py` (stdlib-only,
+narrated: upload set → evaluate corpus → reveal outcomes), and SMOKETEST.md
+(staged empty→calibrated walkthrough with per-card explanations).
+**Honesty note baked into the docs:** bootstrap calibration is in-sample
+(predictor r≈0.98 vs cross-validated ≈0.3 on 14 records) — real trust
+accumulates from post-hoc outcomes on unseen ads; expect r to settle.
+**Measured on the example corpus (keyless):** funnel scores track true CTR
+order; bottom-five ads (incl. all three rule-legal spam ads) eliminated at
+the predictor threshold; post-bootstrap fresh-ad verdict = weighted fusion
+(predictor weight 0.98, judge 0.42); n: predictor 14, judge 9 (judge only
+sees predictor survivors).
+**Impact:** api.py, storage/repo.py, examples/, SMOKETEST.md, tests (65).
