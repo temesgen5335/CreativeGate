@@ -35,6 +35,26 @@ button { cursor: pointer; }
 ::-webkit-scrollbar { width: 10px; height: 10px; }
 ::-webkit-scrollbar-thumb { background: #D1D5DB; border-radius: 6px; }
 
+/* ---- small-screen gate ----
+   The dashboard's data-dense layouts (288px rail + grids) hold their shape
+   down to tablet width; below ~700px they distort rather than degrade, so
+   we gate honestly instead of shipping a broken view. Raise the breakpoint
+   only after the layouts actually support it. */
+#screen-gate { display: none; }
+@media (max-width: 699px) {
+  /* Hide the app entirely: if any wide content stayed in the layout, mobile
+     browsers would expand the layout viewport past device width and the
+     fixed overlay would center off-screen. No content, no expansion. */
+  #topbar, main { display: none !important; }
+  body { overflow: hidden; }
+  #screen-gate { display: flex; position: fixed; inset: 0; z-index: 200; background: var(--ink); color: var(--paper); flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 32px; gap: 18px; }
+  #screen-gate .mark { width: 44px; height: 44px; border-radius: 10px; background: var(--ink-raised); border: 1px solid var(--ink-border-2); display: flex; align-items: center; justify-content: center; }
+  #screen-gate .mark div { width: 16px; height: 16px; border: 3px solid var(--green); border-radius: 3px; }
+  #screen-gate h1 { font-size: 22px; letter-spacing: -0.02em; font-weight: 700; margin: 0; }
+  #screen-gate p { font-size: 14.5px; line-height: 1.6; color: #9CA3AF; max-width: 340px; margin: 0; }
+  #screen-gate .mono-note { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--muted); letter-spacing: 0.06em; text-transform: uppercase; }
+}
+
 /* ---- app shell ---- */
 #topbar { position: sticky; top: 0; z-index: 50; display: flex; align-items: center; justify-content: space-between; gap: 24px; height: 66px; padding: 0 28px; background: rgba(249,250,251,0.86); backdrop-filter: blur(10px); border-bottom: 1px solid var(--border); }
 #logo { display: flex; align-items: center; gap: 12px; cursor: pointer; }
@@ -308,6 +328,13 @@ footer .legal { display: flex; justify-content: space-between; align-items: cent
 </style>
 </head>
 <body>
+
+<div id="screen-gate">
+  <div class="mark"><div></div></div>
+  <h1>This screen is too small for the gate.</h1>
+  <p>CreativeGate's dashboard is data-dense — verdict telemetry, evidence ledgers, calibration charts — and we currently support desktop, PC, and tablet views only. Please open this page on your computer.</p>
+  <span class="mono-note">min width 700px · mobile support planned</span>
+</div>
 
 <header id="topbar">
   <div id="logo" onclick="go('home')">
