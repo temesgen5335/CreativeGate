@@ -13,6 +13,11 @@ build/
 .creativegate_cache/
 demo_report.html
 verdict.html
+docs/
+
+#environment files
+.env
+
 
 # local tooling (governance docs in .claude/ ARE committed)
 .claude/settings.local.json
