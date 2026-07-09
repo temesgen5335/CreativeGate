@@ -9,6 +9,7 @@ outcomes, and show the system updating how much it trusts itself.
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 
 import typer
@@ -22,6 +23,13 @@ from .schemas import Artifact, GroundTruthRecord, Modality
 from .storage import Repository
 
 app = typer.Typer(help="CreativeGate: evaluate creative artifacts before you spend.")
+
+# Deployment platforms configure via env; explicit flags always win.
+_DB_OPT = typer.Option(None, "--db", help="SQLite path (default: $CREATIVEGATE_DB or creativegate.db).")
+
+
+def _resolve_db(db: str | None) -> str:
+    return db or os.environ.get("CREATIVEGATE_DB", "creativegate.db")
 
 
 def _setup(db: str, profile_path: str | None, seed: int):
@@ -39,11 +47,12 @@ def evaluate(
     artifact_id: str = typer.Option("cli-artifact", help="Identifier for the artifact."),
     segment: str = typer.Option("default"),
     profile: str = typer.Option(None, help="Path to a profile YAML/JSON."),
-    db: str = typer.Option("creativegate.db"),
+    db: str = _DB_OPT,
     report: Path = typer.Option(None, help="Write an HTML verdict report here."),
     seed: int = typer.Option(7),
 ):
     """Run one artifact through the funnel and print the verdict."""
+    db = _resolve_db(db)
     if text is None and file is None:
         raise typer.BadParameter("Provide --text or --file.")
     content = text if text is not None else file.read_text()
@@ -67,10 +76,11 @@ def evaluate(
 @app.command()
 def seed_synthetic(
     n: int = typer.Option(200, help="Number of synthetic ground-truth records."),
-    db: str = typer.Option("creativegate.db"),
+    db: str = _DB_OPT,
     seed: int = typer.Option(7),
 ):
     """Create and store the synthetic starter ground-truth set, then calibrate."""
+    db = _resolve_db(db)
     world = SyntheticWorld(seed=seed)
     gt = world.generate_set(n)
     repo = Repository(db)
@@ -93,10 +103,10 @@ def seed_synthetic(
 @app.command()
 def calibration(
     rung: str = typer.Argument(..., help="Rung name, e.g. performance_predictor."),
-    db: str = typer.Option("creativegate.db"),
+    db: str = _DB_OPT,
 ):
     """Print the validity report for a rung."""
-    repo = Repository(db)
+    repo = Repository(_resolve_db(db))
     harness = CalibrationHarness(repo)
     report = harness.report(rung)
     typer.echo(report.summary)
@@ -104,21 +114,24 @@ def calibration(
 
 @app.command()
 def serve(
-    host: str = typer.Option("127.0.0.1"),
-    port: int = typer.Option(8000),
-    db: str = typer.Option("creativegate.db"),
+    host: str = typer.Option(None, help="Bind address (default: $CREATIVEGATE_HOST or 127.0.0.1)."),
+    port: int = typer.Option(None, help="Port (default: $PORT or 8000 — $PORT is what PaaS platforms inject)."),
+    db: str = _DB_OPT,
 ):
-    """Start the CreativeGate API."""
-    import os
+    """Start the CreativeGate API and dashboard."""
     import uvicorn
-    os.environ["CREATIVEGATE_DB"] = db
+    host = host or os.environ.get("CREATIVEGATE_HOST", "127.0.0.1")
+    port = port if port is not None else int(os.environ.get("PORT", "8000"))
+    os.environ["CREATIVEGATE_DB"] = _resolve_db(db)
     uvicorn.run("creativegate.api:app", host=host, port=port)
 
 
 @app.command()
 def demo(
     out: Path = typer.Option(Path("demo_report.html"), help="Output HTML report."),
-    db: str = typer.Option("demo_creativegate.db"),
+    db: str = typer.Option("demo_creativegate.db",
+                           help="DELETED and recreated. Deliberately not $CREATIVEGATE_DB-aware: "
+                                "pointing a destructive command at the service db must be explicit."),
     seed: int = typer.Option(7),
 ):
     """The full product narrative on a synthetic world with known physics.
