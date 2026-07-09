@@ -15,6 +15,9 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
+import pickle
+from pathlib import Path
 from typing import Optional
 
 import numpy as np
@@ -87,6 +90,34 @@ class _TrainedModel:
         return norm, mean, std
 
 
+def _cache_dir() -> Path:
+    return Path(os.environ.get("CREATIVEGATE_CACHE_DIR", ".creativegate_cache"))
+
+
+def _load_or_train(key: str, ctx) -> _TrainedModel:
+    """Disk-persisted model cache so a server restart doesn't retrain.
+
+    The pickle lives in a local cache dir this process writes itself — it is
+    a performance cache inside one trust boundary, not an interchange format.
+    Any read/unpickle failure falls back to retraining and overwriting.
+    """
+    path = _cache_dir() / f"predictor-{key}.pkl"
+    if path.exists():
+        try:
+            with open(path, "rb") as f:
+                return pickle.load(f)
+        except Exception:
+            path.unlink(missing_ok=True)  # corrupt/stale cache: retrain
+    model = _TrainedModel(ctx.ground_truth, ctx.target_metric, ctx.seed, ctx.config)
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with open(path, "wb") as f:
+            pickle.dump(model, f)
+    except OSError:
+        pass  # read-only filesystem: in-memory cache still applies
+    return model
+
+
 def _fingerprint(gt: GroundTruthSet, metric: str, seed: int, cfg: dict) -> str:
     payload = json.dumps({
         "set": gt.name, "n": len(gt.records), "metric": metric, "seed": seed,
@@ -107,7 +138,7 @@ class PerformancePredictor(Rung):
             return None
         key = _fingerprint(ctx.ground_truth, ctx.target_metric, ctx.seed, ctx.config)
         if key not in _MODEL_CACHE:
-            _MODEL_CACHE[key] = _TrainedModel(ctx.ground_truth, ctx.target_metric, ctx.seed, ctx.config)
+            _MODEL_CACHE[key] = _load_or_train(key, ctx)
         return _MODEL_CACHE[key]
 
     def evaluate(self, artifact: Artifact, ctx: RungContext) -> RungResult:
