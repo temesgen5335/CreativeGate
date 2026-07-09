@@ -166,3 +166,41 @@ display-only, never fused); repo `artifacts` table + `list_verdicts` +
 engine/funnel.py, report/dashboard.html, tests (46 now). Verified live against
 the demo db: ingest→evaluate→dashboard round-trip, calibration chart from the
 real audit trail, zero console errors.
+
+### 2026-07-09 — D14: Production hardening (durable jobs, auth, uploads, cache, polling)
+**Decision:** Hardened the live service without adding heavy infrastructure:
+- **Durable jobs**: evaluation jobs moved from an in-process dict (old D12) to
+  a `jobs` table. Startup (FastAPI lifespan) marks orphaned queued/running
+  jobs `interrupted` — truthful over convenient. Optional `webhook_url` per
+  job fires best-effort on completion; the job row stays the source of truth.
+- **Token auth, keyless-degradation style**: `CREATIVEGATE_API_TOKEN` set ⇒
+  mutating endpoints (POST /evaluate, /ground-truth, /profiles, /artifacts)
+  require `Authorization: Bearer`; unset ⇒ open dev mode. Reads stay open by
+  design (verdicts are the product's display surface). CORS via
+  `CREATIVEGATE_CORS_ORIGINS` (unset = same-origin only). The SPA picks a
+  token up once from `?token=…` into localStorage.
+- **Artifact upload**: `POST /artifacts` (multipart; .txt/.png/.jpg; size cap
+  `CREATIVEGATE_MAX_UPLOAD_MB`, default 25). Text stored inline in the DB;
+  images to `<db>.artifacts/` (or `CREATIVEGATE_ARTIFACT_DIR`).
+  `POST /evaluate` with a known `artifact_id` and no text evaluates the
+  stored payload. Added dependency: python-multipart.
+- **Gate modality scoping (behavior change)**: text rules run only when
+  `artifact.text is not None`. An uploaded image without copy no longer fails
+  "required CTA" — None is absence of copy, "" is a claim of empty copy (""
+  still gets checked). Without this, every image upload was eliminated.
+- **Predictor cache persistence**: trained models pickle to
+  `CREATIVEGATE_CACHE_DIR` (default `.creativegate_cache/`), keyed by the D10
+  fingerprint; corrupt/unreadable cache retrains and overwrites. Pickle is
+  fine here: local performance cache inside one trust boundary, never an
+  interchange format.
+- **Dashboard live polling**: 5s signature poll on /verdicts; re-renders only
+  on change, preserves the selected run by verdict id, skips ticks while the
+  user is typing or the tab is hidden. Runs submitted by other clients appear
+  without reload.
+**Deliberately deferred:** Postgres (until concurrent-write load is real),
+structured logging/containerization, SSE (polling is enough at demo scale).
+**Impact:** api.py (rewritten), storage/repo.py (jobs table + migrations
+list), rungs/deterministic.py, rungs/predictor.py, report/dashboard.html,
+pyproject.toml, .gitignore, tests/test_hardening.py (14 new; 60 total).
+Verified live: paste→verdict 701ms round-trip, curl-uploaded PNG surfaced in
+an open browser tab via polling, job rows durable across repo handles.

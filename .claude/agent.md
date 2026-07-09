@@ -17,6 +17,17 @@ No API keys are required for anything above. `OPENAI_API_KEY` (or
 OpenAI-compatible endpoint) upgrades the judge rung from the deterministic
 heuristic to a real LLM. Everything must keep working without them.
 
+Service environment variables (all optional; unset = sensible dev default):
+
+| Var | Effect |
+|---|---|
+| `CREATIVEGATE_DB` | SQLite path for the API process (default `creativegate.db`) |
+| `CREATIVEGATE_API_TOKEN` | set ⇒ mutating endpoints require `Authorization: Bearer`; unset ⇒ open |
+| `CREATIVEGATE_CORS_ORIGINS` | comma-separated allowed origins (unset = same-origin only) |
+| `CREATIVEGATE_ARTIFACT_DIR` | upload store (default `<db>.artifacts/`) |
+| `CREATIVEGATE_MAX_UPLOAD_MB` | upload size cap (default 25) |
+| `CREATIVEGATE_CACHE_DIR` | persisted predictor models (default `.creativegate_cache/`) |
+
 ## Repository map
 
 ```
@@ -44,8 +55,9 @@ src/creativegate/
   report/dashboard.html # The live dashboard SPA (vanilla JS, no build step),
                     # served at GET /. Design source: docs/creative-gate-system-design.
                     # Every number is fetched from the API — never hardcode data here.
-  api.py            # FastAPI: / (dashboard), /evaluate (async job), /verdict,
-                    # /verdicts, /artifact, /ground-truth, /calibration,
+  api.py            # FastAPI: / (dashboard), /evaluate (durable async job),
+                    # /jobs, /artifacts (upload), /verdict, /verdicts,
+                    # /artifact, /ground-truth, /calibration,
                     # /calibration/{rung}, /profiles, /health
   cli.py            # evaluate | seed-synthetic | calibration | serve | demo
 configs/default_profile.yaml  # the declarative funnel definition, annotated
