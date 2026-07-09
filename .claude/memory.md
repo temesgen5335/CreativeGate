@@ -253,3 +253,33 @@ the predictor threshold; post-bootstrap fresh-ad verdict = weighted fusion
 (predictor weight 0.98, judge 0.42); n: predictor 14, judge 9 (judge only
 sees predictor survivors).
 **Impact:** api.py, storage/repo.py, examples/, SMOKETEST.md, tests (65).
+
+### 2026-07-09 — D18: Multi-provider LLM fallback chain + .env loading
+**Decision:** `resolve_llm` now builds a `FallbackLLM` chain from every
+configured provider key (OpenAI, Groq, Gemini, OpenRouter, Anthropic — all
+via OpenAI-compatible endpoints; `LLM_PROVIDER` picks the preferred first;
+`CREATIVEGATE_LLM_*` custom endpoint always ranks first). A provider that
+raises goes on a 60s cooldown and the next answers; the chain terminates in
+NullLLM, which cannot fail — so a provider outage degrades fidelity instead
+of erroring the evaluation job (the previous behavior violated "models are
+enhancers, never dependencies"). The chain's `name`/`fidelity` update to
+reflect what actually served comparisons; the judge stamps them into
+evidence, so attribution survives fallback.
+**Scope truth:** API keys affect exactly ONE thing — the judge's pairwise
+comparator. Embeddings remain local TF-IDF (the API embedding slot is a
+designed, unbuilt upgrade); gate/predictor/fusion/calibration never touch a
+key.
+**.env loading:** CLI entrypoints load a local `.env` (existing env always
+wins) via `envfile.load_env_file`. Deliberately NOT on library/API import so
+tests/embedders are never surprised by local keys; conftest additionally
+scrubs all provider vars (autouse) so the suite stays offline even on
+machines with exported keys.
+**Verified live:** Groq (llama-3.1-8b-instant) served 15/15 comparisons at
+full fidelity; forcing a broken key first (LLM_PROVIDER=anthropic with an
+invalid key) fell back to Groq mid-chain with fidelity still honestly
+reported. Note: a real LLM judge shows pass-to-pass variance (confidence
+dropped to 0.0 vs the heuristic's 1.0) — whether it *ranks better* is for
+the calibration harness to measure, not to assume.
+**Impact:** providers/llm.py, providers/__init__.py, envfile.py (new),
+cli.py, tests/conftest.py, tests/test_providers.py (11 new; 76 total),
+.env.example.

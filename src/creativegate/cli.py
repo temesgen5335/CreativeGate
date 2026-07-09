@@ -15,7 +15,13 @@ from pathlib import Path
 import typer
 from scipy import stats
 
+from .envfile import load_env_file
 from .calibration import CalibrationHarness, SyntheticWorld
+
+# CLI entrypoints load a local .env for convenience (real env always wins).
+# Deliberately NOT done on library/API import: tests and embedders must never
+# be surprised by a developer's local keys.
+load_env_file()
 from .engine import FunnelEngine
 from .profiles import default_profile, load_profile
 from .report import render_batch_report, render_verdict_report

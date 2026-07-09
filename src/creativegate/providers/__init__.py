@@ -5,10 +5,11 @@ deterministic zero-key fallback so the funnel always produces a verdict —
 clearly labeled ``provider_fidelity="degraded"`` when the fallback is used.
 """
 
-from .llm import LLMProvider, NullLLM, OpenAICompatibleLLM, resolve_llm
+from .llm import FallbackLLM, LLMProvider, NullLLM, OpenAICompatibleLLM, resolve_llm
 from .embeddings import EmbeddingProvider, TfidfEmbeddings, resolve_embeddings
 
 __all__ = [
+    "FallbackLLM",
     "LLMProvider",
     "NullLLM",
     "OpenAICompatibleLLM",
