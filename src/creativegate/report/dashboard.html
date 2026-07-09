@@ -344,8 +344,8 @@ footer .legal { display: flex; justify-content: space-between; align-items: cent
     </div>
     <div class="ingest-err" id="ingest-err"></div>
     <div class="dropzone" id="dropzone">
-      <div class="t">Drag &amp; drop a text creative</div>
-      <div class="s">.txt only for now&nbsp;&nbsp;·&nbsp;&nbsp;images gate-only via API&nbsp;&nbsp;·&nbsp;&nbsp;video planned v1.0</div>
+      <div class="t">Drag &amp; drop a creative asset</div>
+      <div class="s">.txt · .png · .jpg&nbsp;&nbsp;·&nbsp;&nbsp;images pass the structural gate (saliency v0.2)&nbsp;&nbsp;·&nbsp;&nbsp;video planned v1.0</div>
     </div>
     <div class="profrow">
       <div><span class="lab">Evaluation profile</span><span class="pill" id="profile-pill">—</span></div>
@@ -392,6 +392,17 @@ footer .legal { display: flex; justify-content: space-between; align-items: cent
 'use strict';
 /* ---------- state + tiny helpers ---------- */
 const S = { view: 'home', runs: [], selected: 0, filter: 'all', query: '', open: {}, cal: null, profiles: [] };
+
+/* Bearer token for mutating calls when the server sets CREATIVEGATE_API_TOKEN.
+   Provide it once via ?token=… (persisted to localStorage) — reads stay open. */
+const _urlToken = new URLSearchParams(location.search).get('token');
+if (_urlToken) localStorage.setItem('cg_token', _urlToken);
+const TOKEN = _urlToken || localStorage.getItem('cg_token');
+const authHeaders = (json = true) => {
+  const h = json ? { 'Content-Type': 'application/json' } : {};
+  if (TOKEN) h['Authorization'] = 'Bearer ' + TOKEN;
+  return h;
+};
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const RUNG_LABELS = { deterministic_gate: 'deterministic gate', performance_predictor: 'performance predictor', judge_ensemble: 'judge ensemble', funnel: 'funnel' };
@@ -497,35 +508,57 @@ function renderIngest() {
   }).join('') : `<div class="empty">No runs yet.<span class="mono">seed a database: uv run creativegate demo — or paste copy above</span></div>`;
 }
 
-async function runGate() {
-  const text = $('paste').value.trim();
+function ingestError(msg) {
   const err = $('ingest-err');
-  err.style.display = 'none';
-  if (!text) { err.textContent = 'paste some creative copy first'; err.style.display = 'block'; return; }
+  err.textContent = msg;
+  err.style.display = 'block';
+}
+
+async function submitEvaluation(body) {
   const btn = $('runbtn');
+  $('ingest-err').style.display = 'none';
   btn.disabled = true; btn.textContent = 'Running…';
   try {
-    const job = await (await fetch('/evaluate', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text })
-    })).json();
+    const resp = await fetch('/evaluate', { method: 'POST', headers: authHeaders(), body: JSON.stringify(body) });
+    if (resp.status === 401) throw new Error('this gate requires a token — open the dashboard as /?token=YOUR_TOKEN once');
+    if (!resp.ok) throw new Error('evaluate → ' + resp.status);
+    const job = await resp.json();
     let st;
-    for (let i = 0; i < 60; i++) {
+    for (let i = 0; i < 120; i++) {
       st = await jget('/jobs/' + job.job_id);
       if (st.status !== 'running' && st.status !== 'queued') break;
       await new Promise(r => setTimeout(r, 400));
     }
-    if (st.status !== 'done') throw new Error(st.error || 'evaluation did not finish');
-    S.runs = (await jget('/verdicts?limit=50')).verdicts;
+    if (st.status !== 'done') throw new Error(st.error || 'evaluation did not finish (status: ' + st.status + ')');
+    await refreshData();
     const idx = S.runs.findIndex(r => r.verdict.id === st.verdict_id);
     selectRun(Math.max(0, idx));
-    renderIngest(); renderHome();
     go('dashboard');
   } catch (e) {
-    err.textContent = String(e.message || e);
-    err.style.display = 'block';
+    ingestError(String(e.message || e));
   } finally {
     btn.disabled = false; btn.textContent = 'Run gate →';
+  }
+}
+
+async function runGate() {
+  const text = $('paste').value.trim();
+  if (!text) { ingestError('paste some creative copy first'); return; }
+  await submitEvaluation({ text });
+}
+
+async function uploadAndRun(file) {
+  $('ingest-err').style.display = 'none';
+  try {
+    const fd = new FormData();
+    fd.append('file', file);
+    const up = await fetch('/artifacts', { method: 'POST', headers: authHeaders(false), body: fd });
+    if (up.status === 401) throw new Error('this gate requires a token — open the dashboard as /?token=YOUR_TOKEN once');
+    if (!up.ok) throw new Error((await up.json().catch(() => ({}))).detail || 'upload → ' + up.status);
+    const art = await up.json();
+    await submitEvaluation({ artifact_id: art.artifact_id, modality: art.modality });
+  } catch (e) {
+    ingestError(String(e.message || e));
   }
 }
 
@@ -535,12 +568,13 @@ dz.addEventListener('dragleave', () => dz.classList.remove('over'));
 dz.addEventListener('drop', e => {
   e.preventDefault(); dz.classList.remove('over');
   const f = e.dataTransfer.files && e.dataTransfer.files[0];
-  if (f && (f.type.startsWith('text') || f.name.endsWith('.txt'))) {
+  if (!f) return;
+  if (f.type.startsWith('text') || /\.txt$/i.test(f.name)) {
     f.text().then(t => { $('paste').value = t.trim().slice(0, 2000); });
+  } else if (/\.(png|jpe?g)$/i.test(f.name)) {
+    uploadAndRun(f);   // structural gate now; saliency rung reads pixels in v0.2
   } else {
-    const err = $('ingest-err');
-    err.textContent = 'only .txt creatives can run through the browser today — images via POST /evaluate, video is v1.0';
-    err.style.display = 'block';
+    ingestError('only .txt, .png and .jpg run through the browser today — video is planned for v1.0');
   }
 });
 dz.addEventListener('click', () => $('paste').focus());
@@ -790,6 +824,29 @@ function renderCalibration() {
   }));
   $('tierrows').innerHTML = rows.join('') || '';
 }
+
+/* ---------- live refresh ---------- */
+async function refreshData() {
+  const selectedId = S.runs[S.selected] && S.runs[S.selected].verdict.id;
+  S.runs = (await jget('/verdicts?limit=50')).verdicts;
+  S.cal = await jget('/calibration').catch(() => S.cal);
+  const idx = selectedId ? S.runs.findIndex(r => r.verdict.id === selectedId) : -1;
+  S.selected = idx >= 0 ? idx : 0;
+  renderHome(); renderIngest(); renderDashboard(); renderCalibration();
+}
+
+let _sig = null;
+setInterval(async () => {
+  if (document.hidden) return;                                  // no work in background tabs
+  const a = document.activeElement;
+  if (a && (a.tagName === 'INPUT' || a.tagName === 'TEXTAREA')) return;  // never yank focus mid-typing
+  try {
+    const data = await jget('/verdicts?limit=50');
+    const sig = data.verdicts.map(r => r.verdict.id).join(',');
+    if (_sig === null) { _sig = sig; return; }                   // first tick: baseline only
+    if (sig !== _sig) { _sig = sig; await refreshData(); }       // new runs from any client
+  } catch { /* transient network blip: next tick retries */ }
+}, 5000);
 
 /* ---------- boot ---------- */
 renderNav();
