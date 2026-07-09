@@ -215,6 +215,62 @@ footer .legal { display: flex; justify-content: space-between; align-items: cent
 .drawer .detail { font-size: 13px; color: #D1D5DB; line-height: 1.55; margin-bottom: 12px; }
 .drawer .rawlog { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--faint); background: var(--ink-log); border: 1px solid var(--ink-border); border-radius: 8px; padding: 12px 14px; white-space: pre-wrap; overflow-x: auto; }
 
+/* ---- roadmap / system design ---- */
+#view-roadmap { padding: 54px 30px 80px; max-width: 1220px; width: 100%; margin: 0 auto; }
+#view-roadmap h1 { font-size: 44px; letter-spacing: -0.03em; font-weight: 700; margin: 16px 0 14px; }
+#view-roadmap .lede { font-size: 18px; line-height: 1.55; color: var(--body); max-width: 760px; }
+#view-roadmap h2 { font-size: 26px; letter-spacing: -0.02em; font-weight: 700; margin: 0 0 6px; }
+.rm-section { margin-top: 72px; }
+.rm-section .sub { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--faint); margin-bottom: 24px; }
+.rm-cards3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+.rm-fail { border: 1px solid var(--border); border-radius: 12px; background: var(--card); padding: 22px; }
+.rm-fail .tag { font-family: 'JetBrains Mono', monospace; font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 12px; }
+.rm-fail .t { font-size: 17px; font-weight: 600; margin-bottom: 8px; letter-spacing: -0.01em; }
+.rm-fail .b { font-size: 14px; line-height: 1.55; color: var(--muted); }
+.rm-thesis { margin-top: 22px; border-left: 3px solid var(--green); background: var(--card); border-radius: 0 12px 12px 0; padding: 20px 26px; font-size: 17px; line-height: 1.6; color: var(--ink); }
+.rm-thesis b { color: var(--green-deep); }
+/* architecture layer stack */
+.arch { display: flex; flex-direction: column; gap: 0; }
+.arch-layer { border: 1px solid var(--border); border-radius: 12px; background: var(--card); padding: 16px 20px; }
+.arch-layer.dark { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+.arch-layer .lname { font-family: 'JetBrains Mono', monospace; font-size: 10px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--faint); margin-bottom: 12px; }
+.arch-boxes { display: flex; gap: 10px; flex-wrap: wrap; }
+.arch-box { border: 1px solid var(--border); border-radius: 8px; padding: 10px 14px; flex: 1; min-width: 150px; background: var(--paper); }
+.arch-layer.dark .arch-box { background: var(--ink-raised); border-color: var(--ink-border-2); }
+.arch-box .bt { font-size: 13.5px; font-weight: 600; }
+.arch-box .bs { font-family: 'JetBrains Mono', monospace; font-size: 10.5px; color: var(--muted); margin-top: 4px; line-height: 1.5; }
+.arch-box.ghost { opacity: 0.55; border-style: dashed; }
+.arch-box.accent { border-color: var(--green); box-shadow: inset 0 0 0 1px var(--green); }
+.arch-arrow { text-align: center; font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--faint); padding: 8px 0; }
+.arch-loop { border: 1px solid rgba(5,150,105,0.4); background: rgba(5,150,105,0.06); border-radius: 12px; padding: 16px 20px; margin-top: 10px; }
+.arch-loop .lname { color: var(--green-deep); }
+/* request lifecycle timeline */
+.wire { border: 1px solid var(--border); border-radius: 14px; background: var(--card); overflow: hidden; }
+.wire-row { display: grid; grid-template-columns: 56px 230px 1fr; gap: 18px; padding: 16px 22px; border-top: 1px solid var(--border-soft); align-items: baseline; }
+.wire-row:first-child { border-top: none; }
+.wire-row .n { font-family: 'JetBrains Mono', monospace; font-size: 13px; color: var(--green); }
+.wire-row .who { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--ink); font-weight: 500; }
+.wire-row .what { font-size: 14px; line-height: 1.55; color: var(--body); }
+.wire-row .what code { font-family: 'JetBrains Mono', monospace; font-size: 12px; background: var(--border-soft); border-radius: 4px; padding: 1px 6px; color: var(--ink); }
+.wire-row.loop { background: rgba(5,150,105,0.05); }
+/* rails + roadmap timeline */
+.rm-cards4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+.rail-card { border: 1px solid var(--border); border-radius: 12px; background: var(--card); padding: 20px; }
+.rail-card .t { font-size: 15px; font-weight: 600; margin: 10px 0 8px; }
+.rail-card .b { font-size: 13.5px; line-height: 1.55; color: var(--muted); }
+.rail-card .icon { width: 10px; height: 10px; border-radius: 3px; background: var(--green); }
+.phase { display: grid; grid-template-columns: 120px 110px 1fr; gap: 20px; padding: 18px 22px; border-top: 1px solid var(--border-soft); align-items: baseline; }
+.phase:first-child { border-top: none; }
+.phase .pv { font-family: 'JetBrains Mono', monospace; font-size: 15px; font-weight: 700; }
+.phase .pb { font-size: 14px; line-height: 1.6; color: var(--body); }
+.rm-never { margin-top: 18px; border: 1.5px dashed #D1D5DB; border-radius: 12px; padding: 16px 22px; font-size: 13.5px; color: var(--muted); }
+.rm-never b { color: var(--ink); }
+@media (max-width: 900px) {
+  .rm-cards3, .rm-cards4 { grid-template-columns: 1fr; }
+  .wire-row, .phase { grid-template-columns: 1fr; gap: 6px; }
+  #view-roadmap h1 { font-size: 32px; }
+}
+
 /* ---- calibration ---- */
 #view-cal { flex: 1; padding: 34px 30px 60px; max-width: 1220px; width: 100%; margin: 0 auto; }
 .calhead { display: flex; align-items: flex-start; justify-content: space-between; gap: 24px; margin-bottom: 8px; }
@@ -368,6 +424,132 @@ footer .legal { display: flex; justify-content: space-between; align-items: cent
   <section id="dashmain"></section>
 </main>
 
+<!-- ============ ROADMAP / SYSTEM DESIGN ============ -->
+<main id="view-roadmap">
+  <div class="kicker">// System design &amp; roadmap</div>
+  <h1>The wind tunnel for creative spend</h1>
+  <p class="lede">Aircraft are tested in instrumented rigs long before a pilot flies one. Digital creative mostly skips the wind tunnel — it goes from generation straight to paid traffic. CreativeGate is the wind tunnel: a simulation-first evaluation funnel that scores any creative artifact <em>before</em> money moves, plus the discipline that keeps a wind tunnel honest — continuous calibration of every simulated measurement against real-world outcomes.</p>
+
+  <div class="rm-section">
+    <h2>The problem</h2>
+    <div class="sub">teams evaluating creative at scale have three options, and each fails a different way</div>
+    <div class="rm-cards3">
+      <div class="rm-fail">
+        <div class="tag" style="color:var(--red)">expensive &amp; slow</div>
+        <div class="t">Live A/B testing</div>
+        <div class="b">The ground truth — but it burns real budget and real audience on losers, needs large samples per variant, and can't keep pace with generation systems producing hundreds of variants a day. Testing everything live is economically impossible.</div>
+      </div>
+      <div class="rm-fail">
+        <div class="tag" style="color:var(--amber)">confident noise</div>
+        <div class="t">Raw LLM judges</div>
+        <div class="b">Cheap and flexible — but non-deterministic and model-dependent. Scores vary run to run, and an unvalidated judge is confident noise: nobody can say what a "78/100" means in conversions.</div>
+      </div>
+      <div class="rm-fail">
+        <div class="tag" style="color:var(--muted)">shallow</div>
+        <div class="t">Deterministic rule checks</div>
+        <div class="b">Reliable — but too strict and too shallow. They catch violations, not quality. A creative can pass every rule and still bore every human who sees it.</div>
+      </div>
+    </div>
+    <div class="rm-thesis">These aren't competing alternatives — they're <b>rungs of a funnel, ordered by cost-per-evaluation and fidelity-to-reality</b>. CreativeGate's thesis: <b>evaluate before you spend, and make every cheap evaluator earn its trust by continuous calibration against the expensive ones.</b></div>
+  </div>
+
+  <div class="rm-section">
+    <h2>Architecture, end to end</h2>
+    <div class="sub">every layer is swappable behind a stable contract — the verdict schema is the product</div>
+    <div class="arch">
+      <div class="arch-layer">
+        <div class="lname">Clients — anything that can speak HTTP</div>
+        <div class="arch-boxes">
+          <div class="arch-box"><div class="bt">Dashboard SPA</div><div class="bs">this page — vanilla JS, zero build step, served at /</div></div>
+          <div class="arch-box"><div class="bt">CLI</div><div class="bs">evaluate · seed-synthetic · calibration · serve · demo</div></div>
+          <div class="arch-box"><div class="bt">Agentic pipelines</div><div class="bs">generation systems gating their own outputs via POST /evaluate</div></div>
+          <div class="arch-box ghost"><div class="bt">MCP server</div><div class="bs">v0.2 — same engine exposed as native agent tools</div></div>
+        </div>
+      </div>
+      <div class="arch-arrow">↓ &nbsp;HTTP · bearer token on mutations · CORS opt-in&nbsp; ↓</div>
+      <div class="arch-layer">
+        <div class="lname">Service — FastAPI, async job model</div>
+        <div class="arch-boxes">
+          <div class="arch-box"><div class="bt">Durable jobs</div><div class="bs">jobs table, not process memory — restarts mark orphans interrupted; webhooks on completion</div></div>
+          <div class="arch-box"><div class="bt">Artifact store</div><div class="bs">POST /artifacts — text inline, images on disk for structural checks</div></div>
+          <div class="arch-box"><div class="bt">Read surface</div><div class="bs">/verdicts · /verdict/{id} · /calibration · /health — feeds this dashboard</div></div>
+          <div class="arch-box"><div class="bt">Outcome ingestion</div><div class="bs">POST /ground-truth — real results enter here and trigger recalibration</div></div>
+        </div>
+      </div>
+      <div class="arch-arrow">↓ &nbsp;one evaluation job&nbsp; ↓</div>
+      <div class="arch-layer dark">
+        <div class="lname" style="color:#6B7280">Funnel engine — cost-ordered execution with filtering</div>
+        <div class="arch-boxes">
+          <div class="arch-box"><div class="bt" style="color:#F9FAFB">01 · Deterministic gate</div><div class="bs">free, zero variance. Banned claims, required CTA, length, aspect ratio. Catches violations, never claims quality — score is always null.</div></div>
+          <div class="arch-box"><div class="bt" style="color:#F9FAFB">02 · Performance predictor</div><div class="bs">bagged GBM over engineered + embedding features, trained on the ground-truth set. Prediction ± ensemble uncertainty.</div></div>
+          <div class="arch-box"><div class="bt" style="color:#F9FAFB">03 · Judge ensemble</div><div class="bs">pairwise-only vs known-outcome anchors, temperature 0, N passes, position-debiased, variance reported.</div></div>
+          <div class="arch-box ghost"><div class="bt" style="color:#F9FAFB">Saliency · personas · OPE</div><div class="bs">v0.2–v0.3 rungs — same plugin interface, disabled until calibration evidence exists</div></div>
+        </div>
+        <div class="arch-boxes" style="margin-top:10px">
+          <div class="arch-box accent"><div class="bt" style="color:#F9FAFB">Calibration-weighted fusion</div><div class="bs">weight = measured Spearman vs real outcomes for this segment/modality. Uncalibrated rungs contribute evidence and flags — never weight. Output: score ± band, evidence ledger, validity statements, cheapest-next-test.</div></div>
+        </div>
+      </div>
+      <div class="arch-arrow">↓ &nbsp;providers &amp; persistence&nbsp; ↓</div>
+      <div class="arch-layer">
+        <div class="lname">Foundations</div>
+        <div class="arch-boxes">
+          <div class="arch-box"><div class="bt">Provider slots</div><div class="bs">LLM: any OpenAI-compatible → deterministic heuristic fallback. Embeddings: TF-IDF+SVD fallback. Zero keys always works, labeled "degraded".</div></div>
+          <div class="arch-box"><div class="bt">SQLite repository</div><div class="bs">verdicts · jobs · predictions · outcomes · append-only calibration audit trail. Postgres = reimplement ~10 methods.</div></div>
+          <div class="arch-box"><div class="bt">Model cache</div><div class="bs">trained predictors persist to disk by config fingerprint — restarts don't retrain</div></div>
+          <div class="arch-box"><div class="bt">Determinism</div><div class="bs">seeded runs; every verdict stamps config hash + rung/prompt versions — replayable, diffs attributable</div></div>
+        </div>
+      </div>
+      <div class="arch-loop">
+        <div class="lname">⟲ &nbsp;The calibration loop — the honesty engine, and the actual product</div>
+        <div class="arch-boxes">
+          <div class="arch-box" style="background:#fff"><div class="bt">1 · Record</div><div class="bs">every scoring rung's prediction is stored at evaluation time</div></div>
+          <div class="arch-box" style="background:#fff"><div class="bt">2 · Reconcile</div><div class="bs">real outcomes arrive → joined to predictions per (rung, segment, modality)</div></div>
+          <div class="arch-box" style="background:#fff"><div class="bt">3 · Re-measure</div><div class="bs">Spearman + Pearson recomputed; appended to the audit trail, never overwritten</div></div>
+          <div class="arch-box" style="background:#fff"><div class="bt">4 · Adjust</div><div class="bs">drift alarm when correlation decays → that rung's fusion weight is cut automatically</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="rm-section">
+    <h2>One evaluation, wire by wire</h2>
+    <div class="sub">what actually happens between "Run gate" and a verdict on this dashboard</div>
+    <div class="wire">
+      <div class="wire-row"><span class="n">01</span><span class="who">client → service</span><span class="what"><code>POST /evaluate</code> with text or an uploaded artifact reference. A job row is written (<code>queued</code>) and the id returned immediately — the caller polls <code>/jobs/{id}</code> or registers a webhook.</span></div>
+      <div class="wire-row"><span class="n">02</span><span class="who">service → engine</span><span class="what">A background worker marks the job <code>running</code>, loads the evaluation profile (declarative YAML: which rungs, thresholds, fusion policy, seed) and the named ground-truth set, and builds the funnel.</span></div>
+      <div class="wire-row"><span class="n">03</span><span class="who">engine → rungs</span><span class="what">Rungs execute cheapest-first, each receiving a context (config, ground truth, seed, provider slots, calibration lookup). A failed threshold <b>eliminates</b> the artifact — more expensive rungs never run, and the exact failing evidence rides on the verdict.</span></div>
+      <div class="wire-row"><span class="n">04</span><span class="who">rungs → harness</span><span class="what">Every scoring rung's raw prediction is recorded against the artifact — this is what makes future recalibration possible. Validity is stamped onto each result <em>by the framework</em> from calibration records; rungs cannot self-assert trustworthiness.</span></div>
+      <div class="wire-row"><span class="n">05</span><span class="who">engine → fusion</span><span class="what">Surviving scores fuse with weights = each rung's measured correlation for this segment/modality. The confidence band widens with ensemble disagreement, calibration weakness (1−r²), and thin coverage. If nothing is calibrated, the verdict says <code>DIRECTIONAL ONLY</code> — loudly.</span></div>
+      <div class="wire-row"><span class="n">06</span><span class="who">engine → verdict</span><span class="what">The verdict stores score ± band, the full evidence ledger, per-rung validity statements, flags (including <code>HUMAN_REVIEW_REQUIRED</code> when a known-good anchor scores below the floor), the cheapest-next-test recommendation, runtime, config hash and versions.</span></div>
+      <div class="wire-row"><span class="n">07</span><span class="who">service → clients</span><span class="what">Job flips to <code>done</code>; webhook fires if registered. Every open dashboard tab picks the run up on its next poll — no reload.</span></div>
+      <div class="wire-row loop"><span class="n">⟲</span><span class="who">reality → harness</span><span class="what">Days or weeks later, real outcomes land via <code>POST /ground-truth</code>. The harness re-scores what every cheap rung <em>had predicted</em> for those artifacts, updates per-cell correlations, raises drift alarms, and adjusts fusion weights — with an append-only audit trail. The system learns how much to trust itself.</span></div>
+    </div>
+  </div>
+
+  <div class="rm-section">
+    <h2>Safety rails, enforced structurally</h2>
+    <div class="sub">encoded as the test suite's spine — changes violating these are rejected regardless of quality</div>
+    <div class="rm-cards4">
+      <div class="rail-card"><div class="icon"></div><div class="t">Uncalibrated ⇒ zero weight</div><div class="b">A rung with no measured correlation against real outcomes can flag and explain, but its score can never move the fused verdict.</div></div>
+      <div class="rail-card"><div class="icon"></div><div class="t">No unearned validity</div><div class="b">Validity statements are built by the framework from the calibration store. A rung physically cannot report trust it hasn't earned.</div></div>
+      <div class="rail-card"><div class="icon"></div><div class="t">Known-good floor</div><div class="b">A proven converter scored below the floor raises human review instead of silent rejection — a rung may have drifted; don't auto-bury winners.</div></div>
+      <div class="rail-card"><div class="icon"></div><div class="t">Keyless degradation</div><div class="b">Zero API keys always produces a verdict — honestly labeled lower-fidelity. Models are enhancers, never dependencies.</div></div>
+    </div>
+  </div>
+
+  <div class="rm-section">
+    <h2>Roadmap</h2>
+    <div class="sub">wire, don't stub — a few rungs working end-to-end with real calibration beat all rungs half-built</div>
+    <div class="wire">
+      <div class="phase"><span class="pv">v0.1</span><span><span class="badge pass">SHIPPED</span></span><span class="pb">The vertical slice: stable schemas, funnel engine, three rungs end-to-end, calibration harness verified against a synthetic world with known physics, CLI, API, this dashboard. Hardened: durable jobs, token auth, artifact uploads, model-cache persistence, live polling.</span></div>
+      <div class="phase"><span class="pv">v0.2</span><span><span class="badge warn">NEXT</span></span><span class="pb">MCP server (the engine as native agent tools); attention/saliency rung for images with a keyless contrast-and-center fallback; event-driven recalibration; verdict replay from stored config hashes.</span></div>
+      <div class="phase"><span class="pv">v0.3</span><span><span class="badge warn">PLANNED</span></span><span class="pb">Live-Test Planner: bandit specs seeded with funnel scores as priors, sequential designs with SRM sanity gates, micro-flight/geo-split designs. Off-policy evaluation over propensity logs. Synthetic persona panel with "directional-only until calibrated" enforcement.</span></div>
+      <div class="phase"><span class="pv">v1.0</span><span><span class="badge warn">PLANNED</span></span><span class="pb">Video modality (frame-sampled); proxy-metric ladder validated per segment; multi-tenant profiles; Postgres; hardening.</span></div>
+    </div>
+    <div class="rm-never"><b>Deliberately out of scope, forever:</b> serving traffic, managing spend, an ad server, user management beyond a token, a heavyweight frontend. The funnel plans and scores; it never moves money.</div>
+  </div>
+</main>
+
 <!-- ============ CALIBRATION ============ -->
 <main id="view-cal">
   <div class="calhead">
@@ -425,7 +607,7 @@ function relTime(iso) {
 }
 
 /* ---------- routing ---------- */
-const VIEWS = { home: 'view-home', ingest: 'view-ingest', dashboard: 'view-dashboard', calibration: 'view-cal' };
+const VIEWS = { home: 'view-home', ingest: 'view-ingest', dashboard: 'view-dashboard', calibration: 'view-cal', roadmap: 'view-roadmap' };
 function go(view) {
   S.view = view;
   for (const [k, id] of Object.entries(VIEWS)) $(id).classList.toggle('visible', k === view);

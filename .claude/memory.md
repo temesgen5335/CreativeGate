@@ -204,3 +204,15 @@ list), rungs/deterministic.py, rungs/predictor.py, report/dashboard.html,
 pyproject.toml, .gitignore, tests/test_hardening.py (14 new; 60 total).
 Verified live: paste→verdict 701ms round-trip, curl-uploaded PNG surfaced in
 an open browser tab via polling, job rows durable across repo handles.
+
+### 2026-07-09 — D15: Roadmap / system-design page in the SPA
+**Decision:** Fifth dashboard view (`Roadmap`) presenting the problem
+statement, the layered architecture, the request lifecycle ("one evaluation,
+wire by wire"), the safety rails, and the phased roadmap — written for a
+recruiter/interested-engineer audience.
+**Why static:** it is presentation copy describing the architecture, not
+telemetry; it must render perfectly against an empty database (e.g. a fresh
+clone during a demo). It is the one view with no data dependencies — keep it
+that way. Update its copy when the architecture actually changes (rungs
+added, phases shipped), same discipline as README.
+**Impact:** report/dashboard.html only (CSS + one `<main>` + a VIEWS entry).
