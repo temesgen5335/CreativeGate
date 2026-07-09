@@ -42,8 +42,16 @@ th { color:var(--dim); font-weight:600; }
 .next { border-left:3px solid var(--acc); padding-left:1rem; }
 """
 
+_FAVICON = (
+    '<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,'
+    "%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E"
+    "%3Crect width='32' height='32' rx='7' fill='%230F1115'/%3E"
+    "%3Crect x='10' y='10' width='12' height='12' rx='2' fill='none' "
+    "stroke='%23059669' stroke-width='3'/%3E%3C/svg%3E\">"
+)
+
 _VERDICT_TMPL = """
-<!doctype html><html><head><meta charset="utf-8">
+<!doctype html><html><head><meta charset="utf-8">{{ favicon }}
 <title>CreativeGate verdict {{ v.id }}</title><style>{{ css }}</style></head><body>
 <div class="wrap">
   <h1>CreativeGate verdict &mdash; {{ v.artifact_id }}</h1>
@@ -111,7 +119,7 @@ _VERDICT_TMPL = """
 """
 
 _BATCH_TMPL = """
-<!doctype html><html><head><meta charset="utf-8">
+<!doctype html><html><head><meta charset="utf-8">{{ favicon }}
 <title>CreativeGate funnel run</title><style>{{ css }}</style></head><body>
 <div class="wrap">
   <h1>CreativeGate funnel run &mdash; {{ title }}</h1>
@@ -145,7 +153,7 @@ _env = Environment(loader=BaseLoader(), autoescape=False)
 
 
 def render_verdict_report(verdict: Verdict) -> str:
-    return _env.from_string(_VERDICT_TMPL).render(v=verdict, css=_CSS)
+    return _env.from_string(_VERDICT_TMPL).render(v=verdict, css=_CSS, favicon=_FAVICON)
 
 
 def render_batch_report(verdicts: list[Verdict], title: str = "batch", note: str = "") -> str:
@@ -154,5 +162,6 @@ def render_batch_report(verdicts: list[Verdict], title: str = "batch", note: str
         key=lambda v: v.score, reverse=True,
     )
     return _env.from_string(_BATCH_TMPL).render(
-        verdicts=verdicts, survivors=survivors, title=title, note=note, css=_CSS
+        verdicts=verdicts, survivors=survivors, title=title, note=note, css=_CSS,
+        favicon=_FAVICON,
     )
