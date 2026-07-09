@@ -177,6 +177,14 @@ class TestAPI:
         client = TestClient(api_mod.app)
         assert "default-text-v0.1" in client.get("/profiles").json()["profiles"]
 
+        detail = client.get("/profiles/default-text-v0.1")
+        assert detail.status_code == 200
+        body = detail.json()
+        assert [r["name"] for r in body["rungs"]] == [
+            "deterministic_gate", "performance_predictor", "judge_ensemble"]
+        assert body["config_hash"]  # the same hash verdicts stamp
+        assert client.get("/profiles/nope").status_code == 404
+
     def test_dashboard_and_listing_endpoints(self, tmp_path, monkeypatch):
         monkeypatch.setenv("CREATIVEGATE_DB", str(tmp_path / "api4.db"))
         import creativegate.api as api_mod

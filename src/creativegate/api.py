@@ -324,6 +324,14 @@ def list_profiles() -> dict:
     return {"profiles": names}
 
 
+@app.get("/profiles/{name}")
+def get_profile_detail(name: str) -> dict:
+    """Full declarative definition of a profile: rungs, thresholds, configs,
+    fusion policy — the exact configuration a verdict's config_hash refers to."""
+    profile = get_profile(name)
+    return {**profile.model_dump(mode="json"), "config_hash": profile.config_hash()}
+
+
 @app.post("/profiles", dependencies=[Depends(require_token)])
 def create_profile(profile: EvaluationProfile) -> dict:
     _profiles[profile.name] = profile

@@ -126,7 +126,21 @@ footer .legal { display: flex; justify-content: space-between; align-items: cent
 .profrow { display: flex; align-items: center; justify-content: space-between; margin-top: 22px; padding: 14px 18px; border: 1px solid var(--border); border-radius: 10px; background: var(--card); }
 .profrow .lab { font-size: 13px; color: var(--muted); }
 .profrow .pill { font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: 500; background: var(--border-soft); border-radius: 6px; padding: 5px 10px; margin-left: 12px; }
-.profrow a { background: transparent; border: none; color: var(--green); font-size: 13px; font-weight: 600; }
+.proftoggle { background: transparent; border: none; color: var(--green); font-size: 13px; font-weight: 600; padding: 0; }
+.profdetail { display: none; border: 1px solid var(--border); border-top: none; border-radius: 0 0 10px 10px; background: var(--card); margin: -6px 0 0; padding: 6px 18px 16px; }
+.profdetail.open { display: block; }
+.profdetail .phead-row { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding: 12px 0 4px; flex-wrap: wrap; }
+.profdetail .phead-row .t { font-size: 13px; font-weight: 600; }
+.profdetail .phead-row .m { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--faint); }
+.profrung { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 14px; padding: 11px 0; border-top: 1px solid var(--border-soft); }
+.profrung .n { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--faint); width: 22px; flex: none; }
+.profrung .name { font-size: 14px; font-weight: 500; width: 190px; flex: none; }
+.profrung .thr { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--green-deep); flex: none; }
+.profrung .cfg { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--muted); flex: 1 1 240px; line-height: 1.6; min-width: 0; overflow-wrap: anywhere; }
+@media (max-width: 860px) {
+  .profrung .name { width: auto; flex: 1; }
+  .profrung .cfg { flex-basis: 100%; padding-left: 36px; }
+}
 .recent-head { display: flex; align-items: baseline; justify-content: space-between; margin: 46px 0 14px; }
 .recent-head h3 { font-size: 15px; font-weight: 600; }
 .recent-head .hint { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--faint); }
@@ -406,8 +420,9 @@ footer .legal { display: flex; justify-content: space-between; align-items: cent
     </div>
     <div class="profrow">
       <div><span class="lab">Evaluation profile</span><span class="pill" id="profile-pill">—</span></div>
-      <a href="/profiles">View profiles</a>
+      <button class="proftoggle" id="profile-toggle" onclick="toggleProfile()">View profile</button>
     </div>
+    <div class="profdetail" id="profile-detail"></div>
     <div class="recent-head">
       <h3>Recent runs</h3>
       <span class="hint" id="recent-hint">from this gate's database</span>
@@ -689,6 +704,55 @@ function renderIngest() {
       <span class="rtime">${relTime(v.created_at)}</span>
     </div>`;
   }).join('') : `<div class="empty">No runs yet.<span class="mono">seed a database: uv run creativegate demo — or paste copy above</span></div>`;
+}
+
+/* Profile detail: the declarative funnel definition an artifact is judged
+   against — fetched live from /profiles/{name}, never hardcoded. */
+function summarizeConfig(cfg) {
+  return Object.entries(cfg || {}).filter(([k]) => k !== 'threshold').map(([k, v]) => {
+    if (Array.isArray(v)) {
+      const items = v.map(x => typeof x === 'object' ? (x.name || JSON.stringify(x)) : x);
+      return `${k}: ${items.length <= 4 ? items.join(', ') : items.length + ' entries'}`;
+    }
+    return `${k}: ${v}`;
+  }).join('&nbsp;&nbsp;·&nbsp;&nbsp;');
+}
+
+async function toggleProfile() {
+  const panel = $('profile-detail');
+  const btn = $('profile-toggle');
+  if (panel.classList.contains('open')) {
+    panel.classList.remove('open');
+    btn.textContent = 'View profile';
+    return;
+  }
+  try {
+    const name = S.profiles[0] || 'default-text-v0.1';
+    const p = await jget('/profiles/' + encodeURIComponent(name));
+    const rungs = (p.rungs || []).filter(r => r.enabled !== false).map((r, i) => `
+      <div class="profrung">
+        <span class="n">${String(i + 1).padStart(2, '0')}</span>
+        <span class="name">${esc(r.name.replace(/_/g, ' '))}</span>
+        <span class="thr">${r.threshold != null ? 'survive ≥ ' + r.threshold : 'gate / no threshold'}</span>
+        <span class="cfg">${summarizeConfig(r.config) || '—'}</span>
+      </div>`).join('');
+    panel.innerHTML = `
+      <div class="phead-row">
+        <span class="t">${esc(p.name)} — the declarative funnel this artifact will run through</span>
+        <span class="m">target ${esc(p.target_metric)} · seed ${p.seed} · cfg ${esc(p.config_hash)}</span>
+      </div>
+      ${rungs}
+      <div class="profrung">
+        <span class="n">⊕</span>
+        <span class="name">fusion</span>
+        <span class="thr">${esc((p.fusion && p.fusion.policy) || '')}</span>
+        <span class="cfg">weight = measured Spearman, zero below r ${p.fusion ? p.fusion.min_weight_r : '?'}&nbsp;&nbsp;·&nbsp;&nbsp;known-good floor ${p.fusion ? p.fusion.good_anchor_floor : '?'} → human review</span>
+      </div>`;
+    panel.classList.add('open');
+    btn.textContent = 'Hide profile';
+  } catch (e) {
+    ingestError('could not load profile detail: ' + (e.message || e));
+  }
 }
 
 function ingestError(msg) {
