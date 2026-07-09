@@ -83,6 +83,9 @@ models persist in `.creativegate_cache/` so restarts don't retrain; the
 dashboard live-polls, so runs submitted by any client appear in every open
 tab. `CREATIVEGATE_CORS_ORIGINS` enables cross-origin API use.
 
+**Deploying:** see [DEPLOY.md](DEPLOY.md) — Dockerfile + `railway.json` are
+included; the service is one always-on process with all state on a volume.
+
 **Zero keys required.** With no LLM API key the judge uses a deterministic
 heuristic comparator and the predictor uses TF-IDF fallback embeddings; both
 are clearly labeled `degraded` fidelity in every verdict. Set

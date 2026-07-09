@@ -216,3 +216,20 @@ clone during a demo). It is the one view with no data dependencies — keep it
 that way. Update its copy when the architecture actually changes (rungs
 added, phases shipped), same discipline as README.
 **Impact:** report/dashboard.html only (CSS + one `<main>` + a VIEWS entry).
+
+### 2026-07-09 — D16: Deployment artifacts (Railway-first, any-Docker-host)
+**Decision:** Ship Dockerfile (python:3.12-slim + `uv sync --frozen` from the
+committed lock — reproducible builds), `railway.json` (Dockerfile builder,
+/health check, **numReplicas: 1**), `.dockerignore`, and DEPLOY.md. CLI made
+env-aware: `serve` honors `$PORT` (PaaS-injected), `$CREATIVEGATE_HOST`, and
+all data-touching commands resolve `--db` from `$CREATIVEGATE_DB`.
+**Exception:** `demo` deliberately does NOT honor `$CREATIVEGATE_DB` — it
+deletes the target database, and a destructive command aimed at the service
+db must be explicit, never inherited from the environment.
+**One replica is a hard rule**, not a default: SQLite single-writer + polling
+dashboard. Scaling past one node = the Postgres/queue seam, not more replicas.
+**Verified:** env-only boot (PORT/DB/token → 401 without header, 200 with),
+and the actual Docker image built and exercised end-to-end with a mounted
+volume (health, auth, evaluate→verdict on /data, dashboard served).
+**Impact:** cli.py, Dockerfile, .dockerignore, railway.json, DEPLOY.md,
+README pointer.
