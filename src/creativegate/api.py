@@ -1,19 +1,31 @@
-"""CreativeGate API (v0.1 minimal surface).
+"""CreativeGate API.
 
 Design rationale: API-first — agentic pipelines gate their own outputs
-through these endpoints. v0.1 keeps the async job model simple: an
-in-process job registry with background execution; webhooks and a durable
-queue are the documented upgrade, not a prerequisite for correctness.
+through these endpoints, and the dashboard SPA at ``GET /`` is just another
+API client. Production posture without premature infrastructure:
+
+- **Durable jobs**: evaluation jobs live in the jobs table, not process
+  memory; a restart marks orphans "interrupted" instead of losing them.
+  Optional per-job webhook fires on completion (best-effort).
+- **Token auth, keyless-degradation style**: set ``CREATIVEGATE_API_TOKEN``
+  and every mutating endpoint requires ``Authorization: Bearer <token>``;
+  leave it unset and the API is open for local development. Reads stay open.
+- **Artifact store**: ``POST /artifacts`` uploads text/image payloads to a
+  filesystem store next to the database; ``POST /evaluate`` can then
+  reference them by id.
 """
 
 from __future__ import annotations
 
 import os
+import re
 import uuid
+from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any, Optional
 
-from fastapi import BackgroundTasks, FastAPI, HTTPException
+import httpx
+from fastapi import BackgroundTasks, Depends, FastAPI, File, Header, HTTPException, UploadFile
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, Field
 
@@ -25,15 +37,11 @@ from .report import render_verdict_report
 from .schemas import Artifact, EvaluationProfile, GroundTruthRecord, Modality
 from .storage import Repository
 
-app = FastAPI(
-    title="CreativeGate",
-    version=__version__,
-    description="A simulation-first evaluation funnel for creative artifacts: evaluate before you spend.",
-)
-
 _repo: Optional[Repository] = None
-_jobs: dict[str, dict[str, Any]] = {}
 _profiles: dict[str, EvaluationProfile] = {}
+
+_UPLOAD_EXTENSIONS = {".txt": Modality.TEXT, ".png": Modality.IMAGE,
+                      ".jpg": Modality.IMAGE, ".jpeg": Modality.IMAGE}
 
 
 def get_repo() -> Repository:
@@ -41,6 +49,49 @@ def get_repo() -> Repository:
     if _repo is None:
         _repo = Repository(os.environ.get("CREATIVEGATE_DB", "creativegate.db"))
     return _repo
+
+
+def artifact_dir() -> Path:
+    configured = os.environ.get("CREATIVEGATE_ARTIFACT_DIR")
+    path = Path(configured) if configured else Path(get_repo().db_path + ".artifacts")
+    path.mkdir(parents=True, exist_ok=True)
+    return path
+
+
+def require_token(authorization: Optional[str] = Header(None)) -> None:
+    """Bearer-token gate for mutating endpoints. Unset token = open dev mode."""
+    token = os.environ.get("CREATIVEGATE_API_TOKEN")
+    if not token:
+        return
+    if authorization != f"Bearer {token}":
+        raise HTTPException(401, "Missing or invalid bearer token.")
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    interrupted = get_repo().mark_stale_jobs_interrupted()
+    if interrupted:
+        import logging
+        logging.getLogger("creativegate").warning(
+            "marked %d orphaned job(s) as interrupted at startup", interrupted)
+    yield
+
+
+app = FastAPI(
+    title="CreativeGate",
+    version=__version__,
+    description="A simulation-first evaluation funnel for creative artifacts: evaluate before you spend.",
+    lifespan=lifespan,
+)
+
+_cors = os.environ.get("CREATIVEGATE_CORS_ORIGINS", "")
+if _cors:
+    from fastapi.middleware.cors import CORSMiddleware
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=[o.strip() for o in _cors.split(",") if o.strip()],
+        allow_methods=["*"], allow_headers=["*"],
+    )
 
 
 def get_profile(name: Optional[str]) -> EvaluationProfile:
@@ -59,6 +110,7 @@ class EvaluateRequest(BaseModel):
     platform: str = "default"
     profile: Optional[str] = None
     metadata: dict[str, Any] = Field(default_factory=dict)
+    webhook_url: Optional[str] = None    # POSTed {job_id, status, verdict_id} on completion
 
 
 class JobResponse(BaseModel):
@@ -67,39 +119,96 @@ class JobResponse(BaseModel):
     verdict_id: Optional[str] = None
 
 
-def _run_job(job_id: str, req: EvaluateRequest) -> None:
+def _fire_webhook(url: str, payload: dict) -> None:
     try:
-        repo = get_repo()
+        httpx.post(url, json=payload, timeout=5.0)
+    except Exception:
+        pass  # best-effort by contract; the job row remains the source of truth
+
+
+def _run_job(job_id: str, req: EvaluateRequest) -> None:
+    repo = get_repo()
+    repo.update_job(job_id, "running")
+    try:
         profile = get_profile(req.profile)
         harness = CalibrationHarness(repo)
         gt = repo.get_ground_truth_set(profile.ground_truth_set)
         engine = FunnelEngine(profile, ground_truth=gt, harness=harness)
+
+        text, modality, path = req.text, req.modality, None
+        stored = repo.get_artifact(req.artifact_id)
+        if req.text is None and stored is not None:
+            # Evaluate a previously-uploaded artifact by reference.
+            text = stored["text"]
+            modality = Modality(stored["modality"])
+            path = stored.get("path")
+        else:
+            repo.save_artifact(req.artifact_id, modality.value, text, req.segment)
+
         artifact = Artifact(
-            id=req.artifact_id, modality=req.modality, text=req.text,
+            id=req.artifact_id, modality=modality, text=text, path=path,
             segment=req.segment, platform=req.platform, metadata=req.metadata,
         )
-        repo.save_artifact(artifact.id, artifact.modality.value, artifact.text, artifact.segment)
         verdict = engine.evaluate(artifact)
         repo.save_verdict(verdict)
-        _jobs[job_id] = {"status": "done", "verdict_id": verdict.id}
+        repo.update_job(job_id, "done", verdict_id=verdict.id)
+        if req.webhook_url:
+            _fire_webhook(req.webhook_url,
+                          {"job_id": job_id, "status": "done", "verdict_id": verdict.id})
     except Exception as e:  # surfaced to the poller, never swallowed
-        _jobs[job_id] = {"status": "error", "error": str(e)}
+        repo.update_job(job_id, "error", error=str(e))
+        if req.webhook_url:
+            _fire_webhook(req.webhook_url,
+                          {"job_id": job_id, "status": "error", "error": str(e)})
 
 
-@app.post("/evaluate", response_model=JobResponse)
+@app.post("/evaluate", response_model=JobResponse, dependencies=[Depends(require_token)])
 def evaluate(req: EvaluateRequest, background: BackgroundTasks) -> JobResponse:
     job_id = f"job-{uuid.uuid4().hex[:12]}"
-    _jobs[job_id] = {"status": "running"}
+    get_repo().create_job(job_id, webhook_url=req.webhook_url)
     background.add_task(_run_job, job_id, req)
     return JobResponse(job_id=job_id, status="queued")
 
 
 @app.get("/jobs/{job_id}")
 def get_job(job_id: str) -> dict:
-    job = _jobs.get(job_id)
+    job = get_repo().get_job(job_id)
     if job is None:
         raise HTTPException(404, "Unknown job.")
-    return {"job_id": job_id, **job}
+    job.pop("webhook_url", None)
+    return job
+
+
+@app.post("/artifacts", dependencies=[Depends(require_token)])
+async def upload_artifact(file: UploadFile = File(...), segment: str = "default") -> dict:
+    """Upload a creative payload (.txt/.png/.jpg) into the artifact store.
+
+    Returns an artifact_id usable in POST /evaluate. Text is stored inline;
+    images go to the filesystem store so the deterministic gate can check
+    structure (and the saliency rung can read pixels in v0.2).
+    """
+    ext = Path(file.filename or "").suffix.lower()
+    if ext not in _UPLOAD_EXTENSIONS:
+        raise HTTPException(415, f"Unsupported extension '{ext}'. Allowed: {sorted(_UPLOAD_EXTENSIONS)}")
+    max_mb = float(os.environ.get("CREATIVEGATE_MAX_UPLOAD_MB", "25"))
+    data = await file.read()
+    if len(data) > max_mb * 1024 * 1024:
+        raise HTTPException(413, f"File exceeds the {max_mb:.0f} MB upload limit.")
+
+    modality = _UPLOAD_EXTENSIONS[ext]
+    stem = re.sub(r"[^A-Za-z0-9_-]+", "-", Path(file.filename or "artifact").stem)[:48]
+    artifact_id = f"{stem}-{uuid.uuid4().hex[:6]}"
+    repo = get_repo()
+    if modality == Modality.TEXT:
+        repo.save_artifact(artifact_id, modality.value,
+                           data.decode("utf-8", errors="replace").strip(), segment)
+        path = None
+    else:
+        path = artifact_dir() / f"{artifact_id}{ext}"
+        path.write_bytes(data)
+        repo.save_artifact(artifact_id, modality.value, None, segment, path=str(path))
+    return {"artifact_id": artifact_id, "modality": modality.value,
+            "bytes": len(data), "stored_path": str(path) if path else None}
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -161,7 +270,7 @@ class GroundTruthIngest(BaseModel):
     records: list[GroundTruthRecord]
 
 
-@app.post("/ground-truth")
+@app.post("/ground-truth", dependencies=[Depends(require_token)])
 def ingest_ground_truth(body: GroundTruthIngest) -> dict:
     """Ingest real outcomes; triggers recalibration of every affected rung cell."""
     harness = CalibrationHarness(get_repo())
@@ -183,7 +292,7 @@ def list_profiles() -> dict:
     return {"profiles": names}
 
 
-@app.post("/profiles")
+@app.post("/profiles", dependencies=[Depends(require_token)])
 def create_profile(profile: EvaluationProfile) -> dict:
     _profiles[profile.name] = profile
     return {"name": profile.name, "config_hash": profile.config_hash()}
@@ -191,4 +300,8 @@ def create_profile(profile: EvaluationProfile) -> dict:
 
 @app.get("/health")
 def health() -> dict:
-    return {"status": "ok", "version": __version__}
+    return {
+        "status": "ok",
+        "version": __version__,
+        "auth": "token" if os.environ.get("CREATIVEGATE_API_TOKEN") else "open",
+    }

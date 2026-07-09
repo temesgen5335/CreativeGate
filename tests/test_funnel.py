@@ -135,7 +135,6 @@ class TestAPI:
         monkeypatch.setenv("CREATIVEGATE_DB", str(tmp_path / "api.db"))
         import creativegate.api as api_mod
         monkeypatch.setattr(api_mod, "_repo", None)
-        monkeypatch.setattr(api_mod, "_jobs", {})
         client = TestClient(api_mod.app)
 
         resp = client.post("/evaluate", json={
@@ -182,7 +181,6 @@ class TestAPI:
         monkeypatch.setenv("CREATIVEGATE_DB", str(tmp_path / "api4.db"))
         import creativegate.api as api_mod
         monkeypatch.setattr(api_mod, "_repo", None)
-        monkeypatch.setattr(api_mod, "_jobs", {})
         client = TestClient(api_mod.app)
 
         # The dashboard SPA is served at the root.

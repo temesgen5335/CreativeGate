@@ -9,6 +9,8 @@ build/
 
 # runtime artifacts
 *.db
+*.db.artifacts/
+.creativegate_cache/
 demo_report.html
 verdict.html
 

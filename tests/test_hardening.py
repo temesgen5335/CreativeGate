@@ -1,0 +1,176 @@
+"""Production-hardening invariants: durable jobs, token auth, the artifact
+upload store, predictor cache persistence, and modality-aware gate rules."""
+
+import struct
+import zlib
+
+import pytest
+from fastapi.testclient import TestClient
+
+from creativegate.engine import FunnelEngine
+from creativegate.rungs import DeterministicGate
+from creativegate.rungs.base import RungContext
+from creativegate.schemas import Artifact, Modality
+from creativegate.storage import Repository
+
+
+def _png(width: int, height: int) -> bytes:
+    ihdr = struct.pack(">II", width, height) + b"\x08\x02\x00\x00\x00"
+    chunk = b"IHDR" + ihdr
+    return (b"\x89PNG\r\n\x1a\n" + struct.pack(">I", len(ihdr)) + chunk
+            + struct.pack(">I", zlib.crc32(chunk)))
+
+
+@pytest.fixture
+def client(tmp_path, monkeypatch):
+    monkeypatch.setenv("CREATIVEGATE_DB", str(tmp_path / "hard.db"))
+    monkeypatch.setenv("CREATIVEGATE_ARTIFACT_DIR", str(tmp_path / "store"))
+    monkeypatch.setenv("CREATIVEGATE_CACHE_DIR", str(tmp_path / "cache"))
+    monkeypatch.delenv("CREATIVEGATE_API_TOKEN", raising=False)
+    import creativegate.api as api_mod
+    monkeypatch.setattr(api_mod, "_repo", None)
+    with TestClient(api_mod.app) as c:
+        yield c
+
+
+class TestDurableJobs:
+    def test_job_state_survives_a_new_repository_handle(self, client, tmp_path):
+        resp = client.post("/evaluate", json={"text": "Try our meal kits today. Shop now."})
+        job_id = resp.json()["job_id"]
+        # A fresh Repository over the same file (= a restarted process) must
+        # see the finished job — state lives in the DB, not process memory.
+        fresh = Repository(tmp_path / "hard.db")
+        job = fresh.get_job(job_id)
+        fresh.close()
+        assert job is not None and job["status"] == "done"
+        assert job["verdict_id"]
+
+    def test_orphaned_jobs_marked_interrupted_at_startup(self, tmp_path):
+        repo = Repository(tmp_path / "orphan.db")
+        repo.create_job("job-orphan")
+        repo.update_job("job-orphan", "running")
+        assert repo.mark_stale_jobs_interrupted() == 1
+        job = repo.get_job("job-orphan")
+        repo.close()
+        assert job["status"] == "interrupted"
+        assert "restarted" in job["error"]
+
+    def test_unknown_job_is_404(self, client):
+        assert client.get("/jobs/job-nope").status_code == 404
+
+
+class TestTokenAuth:
+    def test_mutations_require_token_when_set(self, client, monkeypatch):
+        monkeypatch.setenv("CREATIVEGATE_API_TOKEN", "s3cret")
+        body = {"text": "Shop now for great shoes."}
+        assert client.post("/evaluate", json=body).status_code == 401
+        assert client.post("/evaluate", json=body,
+                           headers={"Authorization": "Bearer wrong"}).status_code == 401
+        ok = client.post("/evaluate", json=body,
+                         headers={"Authorization": "Bearer s3cret"})
+        assert ok.status_code == 200
+
+    def test_reads_stay_open_with_token_set(self, client, monkeypatch):
+        monkeypatch.setenv("CREATIVEGATE_API_TOKEN", "s3cret")
+        assert client.get("/verdicts").status_code == 200
+        assert client.get("/calibration").status_code == 200
+        assert client.get("/health").json()["auth"] == "token"
+
+    def test_open_mode_when_unset(self, client):
+        assert client.get("/health").json()["auth"] == "open"
+
+
+class TestArtifactUpload:
+    def test_text_upload_then_evaluate_by_reference(self, client):
+        up = client.post("/artifacts", files={
+            "file": ("headline_variant.txt", b"Try our coffee subscription today. Claim your offer.", "text/plain")})
+        assert up.status_code == 200
+        art = up.json()
+        assert art["modality"] == "text"
+
+        job = client.post("/evaluate", json={"artifact_id": art["artifact_id"]}).json()
+        st = client.get(f"/jobs/{job['job_id']}").json()
+        assert st["status"] == "done"
+        verdict = client.get(f"/verdict/{st['verdict_id']}").json()
+        assert verdict["eliminated"] is False  # CTA present, no banned phrases
+
+    def test_image_upload_runs_structural_gate_only(self, client):
+        up = client.post("/artifacts", files={
+            "file": ("banner.png", _png(1200, 628), "image/png")})
+        assert up.status_code == 200
+        art = up.json()
+        assert art["modality"] == "image" and art["stored_path"]
+
+        job = client.post("/evaluate", json={"artifact_id": art["artifact_id"]}).json()
+        st = client.get(f"/jobs/{job['job_id']}").json()
+        verdict = client.get(f"/verdict/{st['verdict_id']}").json()
+        # Text rules (required CTA, min words) must NOT fire on an image
+        # without copy; scoring rungs skip; verdict is gate-evidence only.
+        assert verdict["eliminated"] is False
+        assert verdict["score"] is None
+
+    def test_unsupported_extension_rejected(self, client):
+        up = client.post("/artifacts", files={"file": ("clip.mp4", b"xxxx", "video/mp4")})
+        assert up.status_code == 415
+
+    def test_oversize_rejected(self, client, monkeypatch):
+        monkeypatch.setenv("CREATIVEGATE_MAX_UPLOAD_MB", "0.0001")
+        up = client.post("/artifacts", files={"file": ("big.txt", b"y" * 2000, "text/plain")})
+        assert up.status_code == 413
+
+
+class TestGateModalityScoping:
+    def test_no_text_means_no_text_checks(self):
+        gate = DeterministicGate()
+        ctx = RungContext(config={
+            "banned_phrases": ["miracle"], "min_words": 4,
+            "required_elements": [{"name": "cta", "pattern": r"\bshop\b"}],
+        })
+        r = gate.evaluate(Artifact(id="i", modality=Modality.IMAGE, text=None), ctx)
+        assert r.passed is True
+        assert all(e.detail.get("check") not in
+                   {"banned_phrase", "required_element", "min_words"} for e in r.evidence)
+
+    def test_empty_string_text_still_checked(self):
+        # "" is a claim of empty copy; None is absence of copy.
+        gate = DeterministicGate()
+        ctx = RungContext(config={"min_words": 4})
+        r = gate.evaluate(Artifact(id="t", modality=Modality.TEXT, text=""), ctx)
+        assert r.passed is False
+
+
+class TestPredictorCachePersistence:
+    def test_model_persists_across_cache_clear(self, tmp_path, monkeypatch, ground_truth, harness, profile):
+        monkeypatch.setenv("CREATIVEGATE_CACHE_DIR", str(tmp_path / "cache"))
+        import creativegate.rungs.predictor as pred_mod
+        monkeypatch.setattr(pred_mod, "_MODEL_CACHE", {})
+
+        artifact = Artifact(id="x", modality=Modality.TEXT,
+                            text="Meet your new favorite meal kits. Free shipping. Try it free.")
+        engine = FunnelEngine(profile, ground_truth=ground_truth, harness=harness)
+        v1 = engine.evaluate(artifact, record_predictions=False)
+        pickles = list((tmp_path / "cache").glob("predictor-*.pkl"))
+        assert len(pickles) == 1  # trained model written to disk
+
+        # Simulate a process restart: empty in-memory cache, model loads from
+        # disk and produces identical scores.
+        monkeypatch.setattr(pred_mod, "_MODEL_CACHE", {})
+        engine2 = FunnelEngine(profile, ground_truth=ground_truth, harness=harness)
+        v2 = engine2.evaluate(artifact, record_predictions=False)
+        assert v1.score == v2.score
+
+    def test_corrupt_cache_falls_back_to_retraining(self, tmp_path, monkeypatch, ground_truth, harness, profile):
+        monkeypatch.setenv("CREATIVEGATE_CACHE_DIR", str(tmp_path / "cache"))
+        import creativegate.rungs.predictor as pred_mod
+        monkeypatch.setattr(pred_mod, "_MODEL_CACHE", {})
+        (tmp_path / "cache").mkdir()
+        artifact = Artifact(id="x", modality=Modality.TEXT,
+                            text="Meet your new favorite meal kits. Free shipping. Try it free.")
+        engine = FunnelEngine(profile, ground_truth=ground_truth, harness=harness)
+        v1 = engine.evaluate(artifact, record_predictions=False)
+
+        for p in (tmp_path / "cache").glob("predictor-*.pkl"):
+            p.write_bytes(b"not a pickle")
+        monkeypatch.setattr(pred_mod, "_MODEL_CACHE", {})
+        v2 = engine.evaluate(artifact, record_predictions=False)
+        assert v1.score == v2.score  # retrained deterministically

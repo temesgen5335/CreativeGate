@@ -73,21 +73,25 @@ class DeterministicGate(Rung):
                 detail={"check": name, "passed": ok, **detail},
             ))
 
-        text = artifact.text or ""
+        # Text rules apply only when a text payload exists: an image artifact
+        # without copy must not fail "required CTA" — that rule is about copy
+        # it doesn't have. None and "" are different claims.
+        text = artifact.text if artifact.text is not None else ""
+        run_text_checks = artifact.text is not None
 
-        for phrase in cfg.get("banned_phrases", []):
+        for phrase in cfg.get("banned_phrases", []) if run_text_checks else []:
             hit = re.search(re.escape(phrase), text, re.I)
             check("banned_phrase", hit is None,
                   f"banned phrase '{phrase}'" + (" found" if hit else " absent"),
                   phrase=phrase)
 
-        for pattern in cfg.get("banned_patterns", []):
+        for pattern in cfg.get("banned_patterns", []) if run_text_checks else []:
             hit = re.search(pattern, text, re.I)
             check("banned_pattern", hit is None,
                   f"banned pattern '{pattern}'" + (f" matched '{hit.group(0)}'" if hit else " absent"),
                   pattern=pattern)
 
-        for element in cfg.get("required_elements", []):
+        for element in cfg.get("required_elements", []) if run_text_checks else []:
             # element: {"name": "cta", "pattern": "..."}
             ok = re.search(element["pattern"], text, re.I) is not None
             check("required_element", ok,
@@ -95,12 +99,12 @@ class DeterministicGate(Rung):
                   element=element["name"])
 
         max_chars = cfg.get("max_chars")
-        if max_chars is not None:
+        if max_chars is not None and run_text_checks:
             check("max_chars", len(text) <= max_chars,
                   f"length {len(text)} vs limit {max_chars}", length=len(text), limit=max_chars)
 
         min_words = cfg.get("min_words")
-        if min_words is not None:
+        if min_words is not None and run_text_checks:
             n = len(text.split())
             check("min_words", n >= min_words,
                   f"{n} words vs minimum {min_words}", words=n, minimum=min_words)

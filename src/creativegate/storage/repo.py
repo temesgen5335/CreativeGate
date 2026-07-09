@@ -68,9 +68,24 @@ CREATE TABLE IF NOT EXISTS artifacts (
     modality TEXT NOT NULL,
     text TEXT,
     segment TEXT NOT NULL,
-    created_at TEXT NOT NULL
+    created_at TEXT NOT NULL,
+    path TEXT
+);
+CREATE TABLE IF NOT EXISTS jobs (
+    id TEXT PRIMARY KEY,
+    status TEXT NOT NULL,
+    verdict_id TEXT,
+    error TEXT,
+    webhook_url TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
 );
 """
+
+# Idempotent migrations for databases created before a column existed.
+_MIGRATIONS = [
+    "ALTER TABLE artifacts ADD COLUMN path TEXT",
+]
 
 
 class Repository:
@@ -78,6 +93,11 @@ class Repository:
         self.db_path = str(db_path)
         self._conn = sqlite3.connect(self.db_path, check_same_thread=False)
         self._conn.executescript(_SCHEMA)
+        for migration in _MIGRATIONS:
+            try:
+                self._conn.execute(migration)
+            except sqlite3.OperationalError:
+                pass  # column already exists
         self._conn.commit()
 
     def close(self) -> None:
@@ -187,21 +207,62 @@ class Repository:
     # -- artifacts (text payloads for dashboard preview) -----------------------
 
     def save_artifact(self, artifact_id: str, modality: str, text: Optional[str],
-                      segment: str) -> None:
+                      segment: str, path: Optional[str] = None) -> None:
         self._conn.execute(
-            "INSERT OR REPLACE INTO artifacts VALUES (?,?,?,?,?)",
+            "INSERT OR REPLACE INTO artifacts VALUES (?,?,?,?,?,?)",
             (artifact_id, modality, text, segment,
-             datetime.now(timezone.utc).isoformat()),
+             datetime.now(timezone.utc).isoformat(), path),
         )
         self._conn.commit()
 
     def get_artifact(self, artifact_id: str) -> Optional[dict]:
         row = self._conn.execute(
-            "SELECT id, modality, text, segment FROM artifacts WHERE id=?", (artifact_id,)
+            "SELECT id, modality, text, segment, path FROM artifacts WHERE id=?", (artifact_id,)
         ).fetchone()
         if row is None:
             return None
-        return {"id": row[0], "modality": row[1], "text": row[2], "segment": row[3]}
+        return {"id": row[0], "modality": row[1], "text": row[2], "segment": row[3], "path": row[4]}
+
+    # -- jobs (durable async-evaluation state) ---------------------------------
+
+    def create_job(self, job_id: str, webhook_url: Optional[str] = None) -> None:
+        now = datetime.now(timezone.utc).isoformat()
+        self._conn.execute(
+            "INSERT INTO jobs VALUES (?,?,?,?,?,?,?)",
+            (job_id, "queued", None, None, webhook_url, now, now),
+        )
+        self._conn.commit()
+
+    def update_job(self, job_id: str, status: str, verdict_id: Optional[str] = None,
+                   error: Optional[str] = None) -> None:
+        self._conn.execute(
+            "UPDATE jobs SET status=?, verdict_id=COALESCE(?, verdict_id), "
+            "error=?, updated_at=? WHERE id=?",
+            (status, verdict_id, error, datetime.now(timezone.utc).isoformat(), job_id),
+        )
+        self._conn.commit()
+
+    def get_job(self, job_id: str) -> Optional[dict]:
+        row = self._conn.execute(
+            "SELECT id, status, verdict_id, error, webhook_url FROM jobs WHERE id=?",
+            (job_id,),
+        ).fetchone()
+        if row is None:
+            return None
+        return {"job_id": row[0], "status": row[1], "verdict_id": row[2],
+                "error": row[3], "webhook_url": row[4]}
+
+    def mark_stale_jobs_interrupted(self) -> int:
+        """Jobs left queued/running by a dead process are truthfully marked
+        interrupted at startup instead of appearing to run forever."""
+        cur = self._conn.execute(
+            "UPDATE jobs SET status='interrupted', "
+            "error='server restarted before the job finished', updated_at=? "
+            "WHERE status IN ('queued','running')",
+            (datetime.now(timezone.utc).isoformat(),),
+        )
+        self._conn.commit()
+        return cur.rowcount
 
     # -- ground truth sets ------------------------------------------------------
 
