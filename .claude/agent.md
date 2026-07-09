@@ -59,7 +59,8 @@ src/creativegate/
                     # /jobs, /artifacts (upload), /verdict, /verdicts,
                     # /artifact, /ground-truth (outcomes -> recalibration),
                     # /ground-truth-sets (bring-your-own corpus),
-                    # /calibration, /calibration/{rung}, /profiles, /health
+                    # /calibration, /calibration/{rung}, /profiles,
+                    # /audit (operational event log), /health
   cli.py            # evaluate | seed-synthetic | calibration | serve | demo
 configs/default_profile.yaml  # the declarative funnel definition, annotated
 tests/              # test_safety_rails.py is the spine — read it to understand

@@ -128,8 +128,8 @@ def _fire_webhook(url: str, payload: dict) -> None:
 
 def _run_job(job_id: str, req: EvaluateRequest) -> None:
     repo = get_repo()
-    repo.update_job(job_id, "running")
     try:
+        repo.update_job(job_id, "running")
         profile = get_profile(req.profile)
         harness = CalibrationHarness(repo)
         # Single-tenant convenience: when the profile-named set is absent,
@@ -155,12 +155,22 @@ def _run_job(job_id: str, req: EvaluateRequest) -> None:
         )
         verdict = engine.evaluate(artifact)
         repo.save_verdict(verdict)
+        repo.append_event(
+            "verdict.stored", verdict.id,
+            artifact_id=artifact.id, profile=verdict.profile_name,
+            config_hash=verdict.config_hash, eliminated=verdict.eliminated,
+            eliminated_by=verdict.eliminated_by, score=verdict.score,
+            flags=len(verdict.flags), runtime_ms=verdict.runtime_ms,
+        )
         repo.update_job(job_id, "done", verdict_id=verdict.id)
         if req.webhook_url:
             _fire_webhook(req.webhook_url,
                           {"job_id": job_id, "status": "done", "verdict_id": verdict.id})
     except Exception as e:  # surfaced to the poller, never swallowed
-        repo.update_job(job_id, "error", error=str(e))
+        try:
+            repo.update_job(job_id, "error", error=str(e))
+        except Exception:
+            pass  # job row already terminal/missing; the audit log has the story
         if req.webhook_url:
             _fire_webhook(req.webhook_url,
                           {"job_id": job_id, "status": "error", "error": str(e)})
@@ -169,7 +179,7 @@ def _run_job(job_id: str, req: EvaluateRequest) -> None:
 @app.post("/evaluate", response_model=JobResponse, dependencies=[Depends(require_token)])
 def evaluate(req: EvaluateRequest, background: BackgroundTasks) -> JobResponse:
     job_id = f"job-{uuid.uuid4().hex[:12]}"
-    get_repo().create_job(job_id, webhook_url=req.webhook_url)
+    get_repo().create_job(job_id, webhook_url=req.webhook_url, artifact_id=req.artifact_id)
     background.add_task(_run_job, job_id, req)
     return JobResponse(job_id=job_id, status="queued")
 
@@ -211,6 +221,8 @@ async def upload_artifact(file: UploadFile = File(...), segment: str = "default"
         path = artifact_dir() / f"{artifact_id}{ext}"
         path.write_bytes(data)
         repo.save_artifact(artifact_id, modality.value, None, segment, path=str(path))
+    repo.append_event("artifact.uploaded", artifact_id,
+                      filename=file.filename, modality=modality.value, bytes=len(data))
     return {"artifact_id": artifact_id, "modality": modality.value,
             "bytes": len(data), "stored_path": str(path) if path else None}
 
@@ -277,8 +289,20 @@ class GroundTruthIngest(BaseModel):
 @app.post("/ground-truth", dependencies=[Depends(require_token)])
 def ingest_ground_truth(body: GroundTruthIngest) -> dict:
     """Ingest real outcomes; triggers recalibration of every affected rung cell."""
-    harness = CalibrationHarness(get_repo())
+    repo = get_repo()
+    harness = CalibrationHarness(repo)
     updated = harness.ingest_outcomes(body.records)
+    repo.append_event(
+        "ground_truth.ingested", f"{len(body.records)} records",
+        artifact_refs=[r.artifact_ref for r in body.records[:20]],
+        recalibrated=[f"{r.rung}/{r.segment}/{r.modality} r={r.spearman:.2f} n={r.n}"
+                      for r in updated],
+    )
+    for r in updated:
+        if r.drift_detected:
+            repo.append_event(
+                "calibration.drift", f"{r.rung}/{r.segment}/{r.modality}",
+                previous_spearman=r.previous_spearman, spearman=r.spearman, n=r.n)
     return {
         "ingested": len(body.records),
         "recalibrated": [r.model_dump(mode="json") for r in updated],
@@ -299,6 +323,9 @@ def create_ground_truth_set(gt: GroundTruthSet) -> dict:
         raise HTTPException(422, "Need at least 2 records with text and the target metric "
                                  "(2+ enables judge anchors; 10+ enables the predictor).")
     get_repo().save_ground_truth_set(gt)
+    get_repo().append_event("ground_truth_set.stored", gt.name,
+                            records=len(gt.records), usable=len(usable),
+                            target_metric=gt.target_metric)
     warnings = []
     if len(usable) < 10:
         warnings.append(f"Only {len(usable)} usable records: the predictor refuses below 10 "
@@ -335,7 +362,20 @@ def get_profile_detail(name: str) -> dict:
 @app.post("/profiles", dependencies=[Depends(require_token)])
 def create_profile(profile: EvaluationProfile) -> dict:
     _profiles[profile.name] = profile
+    get_repo().append_event("profile.created", profile.name,
+                            config_hash=profile.config_hash())
     return {"name": profile.name, "config_hash": profile.config_hash()}
+
+
+@app.get("/audit")
+def audit_trail(limit: int = 100, subject: Optional[str] = None,
+                event: Optional[str] = None) -> dict:
+    """Operational event history, newest first: job transitions, verdicts,
+    uploads, ground-truth ingestions, drift alarms. Filter by exact subject
+    (e.g. a job or verdict id) or event prefix (e.g. 'job.' or 'calibration.')."""
+    events = get_repo().recent_events(
+        limit=min(limit, 500), subject=subject, event_prefix=event)
+    return {"events": events, "count": len(events)}
 
 
 @app.get("/health")

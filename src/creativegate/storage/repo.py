@@ -10,10 +10,13 @@ are keyed so the harness can join them.
 from __future__ import annotations
 
 import json
+import logging
 import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
+
+_audit_logger = logging.getLogger("creativegate.audit")
 
 from ..schemas import (
     CalibrationRecord,
@@ -80,7 +83,24 @@ CREATE TABLE IF NOT EXISTS jobs (
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS audit_log (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    ts TEXT NOT NULL,
+    event TEXT NOT NULL,
+    subject TEXT NOT NULL,
+    detail TEXT NOT NULL
+);
 """
+
+# The job lifecycle is a real state machine; illegal transitions are bugs
+# and must fail loudly rather than silently corrupt history.
+VALID_JOB_TRANSITIONS: dict[str, set[str]] = {
+    "queued": {"running", "error", "interrupted"},
+    "running": {"done", "error", "interrupted"},
+    "done": set(),
+    "error": set(),
+    "interrupted": set(),
+}
 
 # Idempotent migrations for databases created before a column existed.
 _MIGRATIONS = [
@@ -223,24 +243,69 @@ class Repository:
             return None
         return {"id": row[0], "modality": row[1], "text": row[2], "segment": row[3], "path": row[4]}
 
+    # -- audit log (operational event history, append-only) --------------------
+
+    def append_event(self, event: str, subject: str, **detail) -> None:
+        """One timestamped line of operational history. Append-only; the
+        detail payload carries inputs/outputs references (ids, counts,
+        scores) — full artifacts/verdicts live in their own tables."""
+        payload = json.dumps(detail, default=str)
+        self._conn.execute(
+            "INSERT INTO audit_log (ts, event, subject, detail) VALUES (?,?,?,?)",
+            (datetime.now(timezone.utc).isoformat(), event, subject, payload),
+        )
+        self._conn.commit()
+        _audit_logger.info("event=%s subject=%s detail=%s", event, subject, payload)
+
+    def recent_events(self, limit: int = 100, subject: Optional[str] = None,
+                      event_prefix: Optional[str] = None) -> list[dict]:
+        query = "SELECT ts, event, subject, detail FROM audit_log"
+        clauses, params = [], []
+        if subject:
+            clauses.append("subject = ?")
+            params.append(subject)
+        if event_prefix:
+            clauses.append("event LIKE ?")
+            params.append(event_prefix + "%")
+        if clauses:
+            query += " WHERE " + " AND ".join(clauses)
+        query += " ORDER BY id DESC LIMIT ?"
+        params.append(limit)
+        rows = self._conn.execute(query, params).fetchall()
+        return [{"ts": ts, "event": ev, "subject": subj, "detail": json.loads(det)}
+                for ts, ev, subj, det in rows]
+
     # -- jobs (durable async-evaluation state) ---------------------------------
 
-    def create_job(self, job_id: str, webhook_url: Optional[str] = None) -> None:
+    def create_job(self, job_id: str, webhook_url: Optional[str] = None,
+                   artifact_id: Optional[str] = None) -> None:
         now = datetime.now(timezone.utc).isoformat()
         self._conn.execute(
             "INSERT INTO jobs VALUES (?,?,?,?,?,?,?)",
             (job_id, "queued", None, None, webhook_url, now, now),
         )
         self._conn.commit()
+        self.append_event("job.queued", job_id, artifact_id=artifact_id,
+                          webhook=bool(webhook_url))
 
     def update_job(self, job_id: str, status: str, verdict_id: Optional[str] = None,
                    error: Optional[str] = None) -> None:
+        row = self._conn.execute(
+            "SELECT status FROM jobs WHERE id=?", (job_id,)).fetchone()
+        if row is None:
+            raise ValueError(f"Unknown job '{job_id}'")
+        current = row[0]
+        if status not in VALID_JOB_TRANSITIONS.get(current, set()):
+            raise ValueError(
+                f"Illegal job transition '{current}' -> '{status}' for {job_id}")
         self._conn.execute(
             "UPDATE jobs SET status=?, verdict_id=COALESCE(?, verdict_id), "
             "error=?, updated_at=? WHERE id=?",
             (status, verdict_id, error, datetime.now(timezone.utc).isoformat(), job_id),
         )
         self._conn.commit()
+        self.append_event(f"job.{status}", job_id, previous=current,
+                          verdict_id=verdict_id, error=error)
 
     def get_job(self, job_id: str) -> Optional[dict]:
         row = self._conn.execute(
@@ -255,14 +320,20 @@ class Repository:
     def mark_stale_jobs_interrupted(self) -> int:
         """Jobs left queued/running by a dead process are truthfully marked
         interrupted at startup instead of appearing to run forever."""
-        cur = self._conn.execute(
+        stale = [r[0] for r in self._conn.execute(
+            "SELECT id FROM jobs WHERE status IN ('queued','running')").fetchall()]
+        if not stale:
+            return 0
+        self._conn.execute(
             "UPDATE jobs SET status='interrupted', "
             "error='server restarted before the job finished', updated_at=? "
             "WHERE status IN ('queued','running')",
             (datetime.now(timezone.utc).isoformat(),),
         )
         self._conn.commit()
-        return cur.rowcount
+        self.append_event("jobs.interrupted_sweep", "startup",
+                          count=len(stale), job_ids=stale)
+        return len(stale)
 
     # -- ground truth sets ------------------------------------------------------
 

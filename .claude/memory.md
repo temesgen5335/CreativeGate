@@ -283,3 +283,24 @@ the calibration harness to measure, not to assume.
 **Impact:** providers/llm.py, providers/__init__.py, envfile.py (new),
 cli.py, tests/conftest.py, tests/test_providers.py (11 new; 76 total),
 .env.example.
+
+### 2026-07-09 — D19: Explicit job state machine + operational audit log
+**Decision:** (a) `VALID_JOB_TRANSITIONS` in storage/repo.py — the job
+lifecycle (queued → running → done|error|interrupted, terminals frozen) is
+enforced in `update_job`; illegal transitions raise instead of silently
+corrupting history. The background runner's error path is wrapped so a
+failed error-update can never crash the task. (b) `audit_log` table
+(append-only) + `repo.append_event` + `GET /audit?subject=&event=&limit=`.
+Events: job.queued/running/done/error/interrupted, jobs.interrupted_sweep,
+verdict.stored (artifact, profile, config hash, score, flags, runtime),
+artifact.uploaded, ground_truth.ingested, ground_truth_set.stored,
+calibration.drift, profile.created. Each event also emits a Python log line
+(logger "creativegate.audit") for console/platform log capture.
+**Division of history, by design:** the audit log holds the operational
+timeline with id references; full inputs/outputs stay in their own tables
+(artifacts, verdicts with complete evidence ledgers, append-only
+calibrations). Don't duplicate payloads into events.
+**Retention:** unbounded append at single-tenant scale; revisit with a
+pruning policy if the table ever matters.
+**Impact:** storage/repo.py, api.py, tests/test_hardening.py (8 new; 84
+total).

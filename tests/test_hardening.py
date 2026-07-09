@@ -61,6 +61,83 @@ class TestDurableJobs:
         assert client.get("/jobs/job-nope").status_code == 404
 
 
+class TestJobStateMachine:
+    def test_legal_lifecycle(self, tmp_path):
+        repo = Repository(tmp_path / "sm.db")
+        repo.create_job("j1")
+        repo.update_job("j1", "running")
+        repo.update_job("j1", "done", verdict_id="v-x")
+        assert repo.get_job("j1")["status"] == "done"
+        repo.close()
+
+    def test_terminal_states_cannot_regress(self, tmp_path):
+        repo = Repository(tmp_path / "sm.db")
+        repo.create_job("j1")
+        repo.update_job("j1", "running")
+        repo.update_job("j1", "done", verdict_id="v-x")
+        with pytest.raises(ValueError, match="Illegal job transition"):
+            repo.update_job("j1", "running")
+        with pytest.raises(ValueError, match="Illegal job transition"):
+            repo.update_job("j1", "error", error="late failure")
+        assert repo.get_job("j1")["status"] == "done"  # history uncorrupted
+        repo.close()
+
+    def test_queued_cannot_jump_to_done(self, tmp_path):
+        repo = Repository(tmp_path / "sm.db")
+        repo.create_job("j1")
+        with pytest.raises(ValueError, match="Illegal job transition"):
+            repo.update_job("j1", "done", verdict_id="v-x")
+        repo.close()
+
+    def test_unknown_job_rejected(self, tmp_path):
+        repo = Repository(tmp_path / "sm.db")
+        with pytest.raises(ValueError, match="Unknown job"):
+            repo.update_job("ghost", "running")
+        repo.close()
+
+
+class TestAuditTrail:
+    def test_evaluation_leaves_a_complete_event_timeline(self, client):
+        resp = client.post("/evaluate", json={
+            "artifact_id": "audited-ad",
+            "text": "Try our meal kits today. Save 30% on your first order."})
+        job_id = resp.json()["job_id"]
+
+        events = client.get("/audit", params={"subject": job_id}).json()["events"]
+        names = [e["event"] for e in reversed(events)]      # chronological
+        assert names == ["job.queued", "job.running", "job.done"]
+        assert events[-1]["detail"]["artifact_id"] == "audited-ad"
+
+        verdicts = client.get("/audit", params={"event": "verdict."}).json()["events"]
+        assert verdicts and verdicts[0]["detail"]["artifact_id"] == "audited-ad"
+        assert "score" in verdicts[0]["detail"] and "runtime_ms" in verdicts[0]["detail"]
+
+    def test_upload_and_ground_truth_are_audited(self, client):
+        client.post("/artifacts", files={
+            "file": ("copy.txt", b"Order the bundle today. Shop now.", "text/plain")})
+        records = [{"artifact_ref": f"a{i}", "modality": "text",
+                    "outcomes": {"ctr": i / 100}} for i in range(6)]
+        client.post("/ground-truth", json={"records": records})
+
+        all_events = client.get("/audit").json()["events"]
+        names = {e["event"] for e in all_events}
+        assert "artifact.uploaded" in names
+        assert "ground_truth.ingested" in names
+
+    def test_audit_is_readable_without_token(self, client, monkeypatch):
+        monkeypatch.setenv("CREATIVEGATE_API_TOKEN", "s3cret")
+        assert client.get("/audit").status_code == 200  # reads stay open
+
+    def test_interrupted_sweep_is_audited(self, tmp_path):
+        repo = Repository(tmp_path / "sweep.db")
+        repo.create_job("j-lost")
+        repo.update_job("j-lost", "running")
+        repo.mark_stale_jobs_interrupted()
+        events = repo.recent_events(event_prefix="jobs.interrupted")
+        assert events and events[0]["detail"]["job_ids"] == ["j-lost"]
+        repo.close()
+
+
 class TestTokenAuth:
     def test_mutations_require_token_when_set(self, client, monkeypatch):
         monkeypatch.setenv("CREATIVEGATE_API_TOKEN", "s3cret")
