@@ -278,3 +278,15 @@ class Repository:
             "SELECT payload FROM ground_truth_sets WHERE name=?", (name,)
         ).fetchone()
         return GroundTruthSet.model_validate_json(row[0]) if row else None
+
+    def latest_ground_truth_set(self) -> Optional[GroundTruthSet]:
+        row = self._conn.execute(
+            "SELECT payload FROM ground_truth_sets ORDER BY updated_at DESC LIMIT 1"
+        ).fetchone()
+        return GroundTruthSet.model_validate_json(row[0]) if row else None
+
+    def list_ground_truth_sets(self) -> list[tuple[str, int]]:
+        rows = self._conn.execute(
+            "SELECT name, payload FROM ground_truth_sets ORDER BY updated_at DESC"
+        ).fetchall()
+        return [(name, len(GroundTruthSet.model_validate_json(p).records)) for name, p in rows]

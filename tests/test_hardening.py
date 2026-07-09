@@ -1,8 +1,10 @@
 """Production-hardening invariants: durable jobs, token auth, the artifact
 upload store, predictor cache persistence, and modality-aware gate rules."""
 
+import json
 import struct
 import zlib
+from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
@@ -117,6 +119,68 @@ class TestArtifactUpload:
         monkeypatch.setenv("CREATIVEGATE_MAX_UPLOAD_MB", "0.0001")
         up = client.post("/artifacts", files={"file": ("big.txt", b"y" * 2000, "text/plain")})
         assert up.status_code == 413
+
+
+class TestGroundTruthSetAPI:
+    CORPUS = Path(__file__).parent.parent / "examples" / "ground-truth-example.json"
+
+    def test_upload_corpus_enables_scored_verdicts(self, client):
+        payload = json.loads(self.CORPUS.read_text())
+        resp = client.post("/ground-truth-sets", json=payload)
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["usable"] == 14 and body["warnings"] == []
+
+        # Default profile names 'synthetic-starter'; the freshly-uploaded set
+        # must be used via the latest-set fallback — no profile editing.
+        job = client.post("/evaluate", json={
+            "text": "Meet your new favorite trail shoes. Free shipping on your first order. "
+                    "Shop now — sale ends Friday."}).json()
+        st = client.get(f"/jobs/{job['job_id']}").json()
+        assert st["status"] == "done"
+        verdict = client.get(f"/verdict/{st['verdict_id']}").json()
+        assert verdict["eliminated"] is False
+        assert verdict["score"] is not None          # predictor trained, judge anchored
+        # No outcomes reported yet => nothing calibrated => honest labeling.
+        assert "DIRECTIONAL ONLY" in verdict["confidence_note"]
+
+    def test_full_bootstrap_produces_weighted_verdicts(self, client):
+        payload = json.loads(self.CORPUS.read_text())
+        client.post("/ground-truth-sets", json=payload)
+        for r in payload["records"]:
+            client.post("/evaluate", json={"artifact_id": r["artifact_ref"], "text": r["text"]})
+        resp = client.post("/ground-truth", json={"records": payload["records"]})
+        recalibrated = resp.json()["recalibrated"]
+        assert {r["rung"] for r in recalibrated} >= {"performance_predictor", "judge_ensemble"}
+
+        job = client.post("/evaluate", json={
+            "text": "Meet your new favorite trail shoes. Free shipping on your first order. "
+                    "Shop now — sale ends Friday."}).json()
+        st = client.get(f"/jobs/{job['job_id']}").json()
+        verdict = client.get(f"/verdict/{st['verdict_id']}").json()
+        assert "DIRECTIONAL ONLY" not in verdict["confidence_note"]
+        assert "Calibration-weighted fusion" in verdict["confidence_note"]
+
+    def test_undersized_set_rejected(self, client):
+        resp = client.post("/ground-truth-sets", json={
+            "name": "tiny",
+            "records": [{"artifact_ref": "a1", "modality": "text",
+                         "text": "One ad. Shop now.", "outcomes": {"ctr": 0.02}}]})
+        assert resp.status_code == 422
+
+    def test_small_set_accepted_with_warning(self, client):
+        records = [{"artifact_ref": f"a{i}", "modality": "text",
+                    "text": f"Ad number {i} with an offer. Shop now.",
+                    "outcomes": {"ctr": 0.01 * (i + 1)}} for i in range(3)]
+        resp = client.post("/ground-truth-sets", json={"name": "small", "records": records})
+        assert resp.status_code == 200
+        assert resp.json()["warnings"]  # predictor will refuse below 10
+
+    def test_listing(self, client):
+        payload = json.loads(self.CORPUS.read_text())
+        client.post("/ground-truth-sets", json=payload)
+        sets = client.get("/ground-truth-sets").json()["sets"]
+        assert {"name": "starter-live", "records": 14} in sets
 
 
 class TestGateModalityScoping:

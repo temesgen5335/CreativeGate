@@ -34,7 +34,7 @@ from .calibration import CalibrationHarness
 from .engine import FunnelEngine
 from .profiles import default_profile
 from .report import render_verdict_report
-from .schemas import Artifact, EvaluationProfile, GroundTruthRecord, Modality
+from .schemas import Artifact, EvaluationProfile, GroundTruthRecord, GroundTruthSet, Modality
 from .storage import Repository
 
 _repo: Optional[Repository] = None
@@ -132,7 +132,11 @@ def _run_job(job_id: str, req: EvaluateRequest) -> None:
     try:
         profile = get_profile(req.profile)
         harness = CalibrationHarness(repo)
-        gt = repo.get_ground_truth_set(profile.ground_truth_set)
+        # Single-tenant convenience: when the profile-named set is absent,
+        # fall back to the most recently stored set so a freshly-uploaded
+        # corpus works without editing the profile. Explicit names win.
+        gt = (repo.get_ground_truth_set(profile.ground_truth_set)
+              or repo.latest_ground_truth_set())
         engine = FunnelEngine(profile, ground_truth=gt, harness=harness)
 
         text, modality, path = req.text, req.modality, None
@@ -279,6 +283,34 @@ def ingest_ground_truth(body: GroundTruthIngest) -> dict:
         "ingested": len(body.records),
         "recalibrated": [r.model_dump(mode="json") for r in updated],
     }
+
+
+@app.post("/ground-truth-sets", dependencies=[Depends(require_token)])
+def create_ground_truth_set(gt: GroundTruthSet) -> dict:
+    """Store a named ground-truth corpus: artifacts with known outcomes.
+
+    This is what the performance predictor trains on and the judge draws its
+    pairwise anchors from. Bring real ads with measured CTRs. Storing a set
+    does NOT create calibration records — rungs still have to earn fusion
+    weight by predicting outcomes that are later reported to /ground-truth.
+    """
+    usable = [r for r in gt.records if r.text and gt.target_metric in r.outcomes]
+    if len(usable) < 2:
+        raise HTTPException(422, "Need at least 2 records with text and the target metric "
+                                 "(2+ enables judge anchors; 10+ enables the predictor).")
+    get_repo().save_ground_truth_set(gt)
+    warnings = []
+    if len(usable) < 10:
+        warnings.append(f"Only {len(usable)} usable records: the predictor refuses below 10 "
+                        "and will contribute evidence only.")
+    return {"name": gt.name, "records": len(gt.records),
+            "usable": len(usable), "target_metric": gt.target_metric,
+            "warnings": warnings}
+
+
+@app.get("/ground-truth-sets")
+def list_ground_truth_sets() -> dict:
+    return {"sets": [{"name": n, "records": c} for n, c in get_repo().list_ground_truth_sets()]}
 
 
 @app.get("/calibration/{rung}")
