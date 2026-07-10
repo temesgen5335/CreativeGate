@@ -20,6 +20,7 @@ _audit_logger = logging.getLogger("creativegate.audit")
 
 from ..schemas import (
     CalibrationRecord,
+    EvaluationProfile,
     GroundTruthRecord,
     GroundTruthSet,
     Verdict,
@@ -89,6 +90,11 @@ CREATE TABLE IF NOT EXISTS audit_log (
     event TEXT NOT NULL,
     subject TEXT NOT NULL,
     detail TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS profiles (
+    name TEXT PRIMARY KEY,
+    payload TEXT NOT NULL,
+    updated_at TEXT NOT NULL
 );
 """
 
@@ -334,6 +340,27 @@ class Repository:
         self.append_event("jobs.interrupted_sweep", "startup",
                           count=len(stale), job_ids=stale)
         return len(stale)
+
+    # -- profiles (declarative funnel definitions, one per artifact class) ------
+
+    def save_profile(self, profile: "EvaluationProfile") -> None:
+        self._conn.execute(
+            "INSERT OR REPLACE INTO profiles VALUES (?,?,?)",
+            (profile.name, profile.model_dump_json(),
+             datetime.now(timezone.utc).isoformat()),
+        )
+        self._conn.commit()
+
+    def get_profile(self, name: str) -> Optional["EvaluationProfile"]:
+        row = self._conn.execute(
+            "SELECT payload FROM profiles WHERE name=?", (name,)
+        ).fetchone()
+        return EvaluationProfile.model_validate_json(row[0]) if row else None
+
+    def list_profile_names(self) -> list[str]:
+        rows = self._conn.execute(
+            "SELECT name FROM profiles ORDER BY name").fetchall()
+        return [r[0] for r in rows]
 
     # -- ground truth sets ------------------------------------------------------
 

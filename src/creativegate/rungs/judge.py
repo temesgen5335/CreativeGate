@@ -15,6 +15,8 @@ real outcomes (stamped by the framework, see rungs.base).
 
 from __future__ import annotations
 
+import hashlib
+
 from ..schemas import Artifact, CostTier, Evidence, GroundTruthRecord, Modality, RungResult
 from ..providers import resolve_llm
 from .base import Rung, RungContext
@@ -55,6 +57,13 @@ class CalibratedJudgeEnsemble(Rung):
         cfg = ctx.config
         k = int(cfg.get("num_anchors", 5))
         n_passes = int(cfg.get("ensemble_passes", 3))
+        # The rubric is profile config (charter §6): a mobile-app storyboard
+        # and a web banner are judged against different written criteria.
+        # The anchors — the other half of the criteria — come from the
+        # profile's ground-truth set. Default rubric when unset.
+        rubric = cfg.get("rubric") or RUBRIC_PROMPT
+        rubric_version = (PROMPT_VERSION if rubric is RUBRIC_PROMPT
+                          else "custom-" + hashlib.sha256(rubric.encode()).hexdigest()[:8])
         llm = ctx.providers.get("llm") or resolve_llm(cfg.get("llm"))
 
         evidence: list[Evidence] = []
@@ -86,10 +95,10 @@ class CalibratedJudgeEnsemble(Rung):
                 weight = 0.5 + (a.outcomes[ctx.target_metric] - lo) / span  # 0.5..1.5
                 seed = ctx.seed * 1000 + p
                 if p % 2 == 0:
-                    verdict = llm.compare(RUBRIC_PROMPT, artifact.text, a.text, seed)
+                    verdict = llm.compare(rubric, artifact.text, a.text, seed)
                     won = verdict == "A"
                 else:
-                    verdict = llm.compare(RUBRIC_PROMPT, a.text, artifact.text, seed)
+                    verdict = llm.compare(rubric, a.text, artifact.text, seed)
                     won = verdict == "B"
                 total_w += weight
                 if won:
@@ -118,7 +127,7 @@ class CalibratedJudgeEnsemble(Rung):
                 f"{n_passes} passes (ensemble variance {variance:.4f}); "
                 f"comparator={llm.name} ({llm.fidelity} fidelity)."
             ),
-            detail={"per_pass": per_pass_scores, "prompt_version": PROMPT_VERSION},
+            detail={"per_pass": per_pass_scores, "prompt_version": rubric_version},
         ))
 
         threshold = cfg.get("threshold")

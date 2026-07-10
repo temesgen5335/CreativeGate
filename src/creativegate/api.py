@@ -38,7 +38,7 @@ from .schemas import Artifact, EvaluationProfile, GroundTruthRecord, GroundTruth
 from .storage import Repository
 
 _repo: Optional[Repository] = None
-_profiles: dict[str, EvaluationProfile] = {}
+DEFAULT_PROFILE_NAME = "default-text-v0.1"
 
 _UPLOAD_EXTENSIONS = {".txt": Modality.TEXT, ".png": Modality.IMAGE,
                       ".jpg": Modality.IMAGE, ".jpeg": Modality.IMAGE}
@@ -95,11 +95,17 @@ if _cors:
 
 
 def get_profile(name: Optional[str]) -> EvaluationProfile:
-    if name is None or name == "default-text-v0.1":
-        return _profiles.get("default-text-v0.1", default_profile())
-    if name in _profiles:
-        return _profiles[name]
-    raise HTTPException(404, f"Unknown profile '{name}'. Known: {sorted(_profiles) + ['default-text-v0.1']}")
+    """Resolve a profile by name: stored profiles win, the shipped default
+    backs the default name. Criteria per artifact class = one profile each."""
+    if name is None:
+        name = DEFAULT_PROFILE_NAME
+    stored = get_repo().get_profile(name)
+    if stored is not None:
+        return stored
+    if name == DEFAULT_PROFILE_NAME:
+        return default_profile()
+    known = sorted(set(get_repo().list_profile_names()) | {DEFAULT_PROFILE_NAME})
+    raise HTTPException(404, f"Unknown profile '{name}'. Known: {known}")
 
 
 class EvaluateRequest(BaseModel):
@@ -132,11 +138,14 @@ def _run_job(job_id: str, req: EvaluateRequest) -> None:
         repo.update_job(job_id, "running")
         profile = get_profile(req.profile)
         harness = CalibrationHarness(repo)
-        # Single-tenant convenience: when the profile-named set is absent,
-        # fall back to the most recently stored set so a freshly-uploaded
-        # corpus works without editing the profile. Explicit names win.
-        gt = (repo.get_ground_truth_set(profile.ground_truth_set)
-              or repo.latest_ground_truth_set())
+        # Convenience for the DEFAULT profile only: fall back to the most
+        # recently stored set so a freshly-uploaded corpus works without
+        # profile editing. Custom profiles name their corpus explicitly —
+        # a missing set means the learned rungs refuse, which is honest;
+        # silently training banner criteria on storyboard outcomes is not.
+        gt = repo.get_ground_truth_set(profile.ground_truth_set)
+        if gt is None and profile.name == DEFAULT_PROFILE_NAME:
+            gt = repo.latest_ground_truth_set()
         engine = FunnelEngine(profile, ground_truth=gt, harness=harness)
 
         text, modality, path = req.text, req.modality, None
@@ -347,7 +356,7 @@ def calibration_report(rung: str) -> dict:
 
 @app.get("/profiles")
 def list_profiles() -> dict:
-    names = sorted(set(_profiles) | {"default-text-v0.1"})
+    names = sorted(set(get_repo().list_profile_names()) | {DEFAULT_PROFILE_NAME})
     return {"profiles": names}
 
 
@@ -361,9 +370,16 @@ def get_profile_detail(name: str) -> dict:
 
 @app.post("/profiles", dependencies=[Depends(require_token)])
 def create_profile(profile: EvaluationProfile) -> dict:
-    _profiles[profile.name] = profile
-    get_repo().append_event("profile.created", profile.name,
-                            config_hash=profile.config_hash())
+    """Store (or replace) a named profile — the criteria for one artifact
+    class: gate rules, thresholds, judge rubric/anchors, and which
+    ground-truth set the learned rungs derive quality from."""
+    if profile.name == DEFAULT_PROFILE_NAME:
+        raise HTTPException(409, "The shipped default profile is immutable; pick a new name.")
+    repo = get_repo()
+    repo.save_profile(profile)
+    repo.append_event("profile.created", profile.name,
+                      config_hash=profile.config_hash(),
+                      ground_truth_set=profile.ground_truth_set)
     return {"name": profile.name, "config_hash": profile.config_hash()}
 
 

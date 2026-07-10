@@ -304,3 +304,21 @@ calibrations). Don't duplicate payloads into events.
 pruning policy if the table ever matters.
 **Impact:** storage/repo.py, api.py, tests/test_hardening.py (8 new; 84
 total).
+
+### 2026-07-10 — D20: Profiles persisted per artifact class; judge rubric is config
+**Context:** "Where are the criteria set?" Criteria live in three layers:
+(1) the EvaluationProfile (hand-written rules per artifact class: gate
+config, thresholds, judge settings), (2) the profile's ground-truth set —
+the LEARNED criteria: the predictor induces quality from that corpus and
+the judge anchors against it; quality is never hand-defined, and (3)
+segment/modality-scoped calibration records limiting where any rung's
+opinion counts.
+**Changes:** profiles table in SQLite — POST /profiles now survives
+restarts (shipped default immutable, 409 on overwrite attempts); judge
+`rubric` is per-profile config (charter §6), verdict evidence records
+`custom-<sha8>` rubric version for attribution; the latest-ground-truth-set
+fallback now applies ONLY to the default profile — a custom profile with a
+missing corpus gets honest refusal, never another artifact class's
+criteria (banner criteria must not silently come from storyboard outcomes).
+**Impact:** storage/repo.py, api.py, rungs/judge.py, tests (6 new; 90
+total).

@@ -260,6 +260,95 @@ class TestGroundTruthSetAPI:
         assert {"name": "starter-live", "records": 14} in sets
 
 
+class TestProfilesPerArtifactClass:
+    BANNER_PROFILE = {
+        "name": "banner-web-v1",
+        "target_metric": "ctr",
+        "ground_truth_set": "banner-outcomes",   # its own corpus, not the default's
+        "seed": 7,
+        "rungs": [
+            {"name": "deterministic_gate",
+             "config": {"banned_phrases": ["click here"], "min_words": 3}},
+            {"name": "performance_predictor", "threshold": 0.1},
+            {"name": "judge_ensemble",
+             "config": {"rubric": "Judge for display-banner attention capture.",
+                        "num_anchors": 3, "ensemble_passes": 1}},
+        ],
+    }
+
+    def test_profile_persists_across_restart(self, client, tmp_path, monkeypatch):
+        resp = client.post("/profiles", json=self.BANNER_PROFILE)
+        assert resp.status_code == 200
+
+        # Simulated restart: fresh repository handle over the same file.
+        import creativegate.api as api_mod
+        monkeypatch.setattr(api_mod, "_repo", None)
+        client2 = TestClient(api_mod.app)
+        assert "banner-web-v1" in client2.get("/profiles").json()["profiles"]
+        detail = client2.get("/profiles/banner-web-v1").json()
+        assert detail["ground_truth_set"] == "banner-outcomes"
+
+    def test_profile_criteria_actually_apply(self, client):
+        client.post("/profiles", json=self.BANNER_PROFILE)
+        # 'click here' is legal under the default profile, banned under banner's.
+        job = client.post("/evaluate", json={
+            "text": "Great deals on shoes, click here to shop now.",
+            "profile": "banner-web-v1"}).json()
+        st = client.get(f"/jobs/{job['job_id']}").json()
+        verdict = client.get(f"/verdict/{st['verdict_id']}").json()
+        assert verdict["eliminated"] and verdict["eliminated_by"] == "deterministic_gate"
+        assert "click here" in verdict["validity_summary"]
+
+    def test_custom_profile_never_falls_back_to_foreign_corpus(self, client):
+        # A stored corpus exists (under another name), but banner-web-v1 names
+        # its own missing set: learned rungs must refuse, not borrow criteria.
+        payload = json.loads((Path(__file__).parent.parent / "examples" /
+                              "ground-truth-example.json").read_text())
+        client.post("/ground-truth-sets", json=payload)
+        client.post("/profiles", json=self.BANNER_PROFILE)
+        job = client.post("/evaluate", json={
+            "text": "Banner headline with a strong offer. Shop now.",
+            "profile": "banner-web-v1"}).json()
+        st = client.get(f"/jobs/{job['job_id']}").json()
+        verdict = client.get(f"/verdict/{st['verdict_id']}").json()
+        assert verdict["score"] is None           # refused: no banner corpus
+        flags = " ".join(verdict["flags"])
+        assert "predictor" in flags
+
+    def test_default_profile_is_immutable(self, client):
+        resp = client.post("/profiles", json={"name": "default-text-v0.1", "rungs": []})
+        assert resp.status_code == 409
+
+    def test_unknown_profile_is_404_with_known_list(self, client):
+        job = client.post("/evaluate", json={"text": "x", "profile": "ghost"}).json()
+        st = client.get(f"/jobs/{job['job_id']}").json()
+        assert st["status"] == "error" and "Unknown profile" in st["error"]
+
+
+class TestJudgeRubricConfig:
+    def test_custom_rubric_reaches_the_comparator(self, ground_truth, harness):
+        from creativegate.rungs import CalibratedJudgeEnsemble
+        from creativegate.rungs.base import RungContext
+        seen_prompts = []
+
+        class Spy:
+            name, fidelity = "spy", "full"
+            def compare(self, prompt, a, b, seed):
+                seen_prompts.append(prompt)
+                return "A"
+
+        rung = CalibratedJudgeEnsemble()
+        ctx = RungContext(
+            config={"rubric": "Judge banners for attention capture.",
+                    "num_anchors": 3, "ensemble_passes": 1},
+            ground_truth=ground_truth, providers={"llm": Spy()})
+        result = rung.evaluate(
+            Artifact(id="b", modality=Modality.TEXT, text="A banner. Shop now."), ctx)
+        assert set(seen_prompts) == {"Judge banners for attention capture."}
+        pred = [e for e in result.evidence if e.kind == "prediction"][0]
+        assert pred.detail["prompt_version"].startswith("custom-")
+
+
 class TestGateModalityScoping:
     def test_no_text_means_no_text_checks(self):
         gate = DeterministicGate()
