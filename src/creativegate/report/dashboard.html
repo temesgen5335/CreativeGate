@@ -279,6 +279,17 @@ footer .legal { display: flex; justify-content: space-between; align-items: cent
 .arch-arrow { text-align: center; font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--faint); padding: 8px 0; }
 .arch-loop { border: 1px solid rgba(5,150,105,0.4); background: rgba(5,150,105,0.06); border-radius: 12px; padding: 16px 20px; margin-top: 10px; }
 .arch-loop .lname { color: var(--green-deep); }
+/* integration contract: annotated payloads */
+.rm-step-h { display: flex; align-items: center; gap: 10px; font-size: 16px; font-weight: 600; margin: 30px 0 4px; letter-spacing: -0.01em; }
+.api-verb { font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 700; background: rgba(5,150,105,0.12); color: var(--green-deep); padding: 3px 9px; border-radius: 5px; }
+.rm-note { font-size: 13.5px; color: var(--muted); line-height: 1.6; margin-top: 6px; max-width: 860px; }
+.rm-code { background: var(--ink); color: #D1D5DB; border-radius: 10px; padding: 16px 18px; font-family: 'JetBrains Mono', monospace; font-size: 12px; line-height: 1.75; overflow-x: auto; white-space: pre; margin-top: 10px; }
+.rm-code .c { color: #6B7280; }
+.rm-code .hl { color: var(--green-dot); }
+.read-rules { margin: 14px 0 0; padding: 0 0 0 1.1rem; max-width: 860px; }
+.read-rules li { font-size: 13.5px; color: var(--body); line-height: 1.65; margin: 6px 0; }
+.read-rules code { font-family: 'JetBrains Mono', monospace; font-size: 12px; background: var(--border-soft); border-radius: 4px; padding: 1px 6px; color: var(--ink); }
+
 /* request lifecycle timeline */
 .wire { border: 1px solid var(--border); border-radius: 14px; background: var(--card); overflow: hidden; }
 .wire-row { display: grid; grid-template-columns: 56px 230px 1fr; gap: 18px; padding: 16px 22px; border-top: 1px solid var(--border-soft); align-items: baseline; }
@@ -566,6 +577,74 @@ footer .legal { display: flex; justify-content: space-between; align-items: cent
       <div class="wire-row"><span class="n">06</span><span class="who">engine → verdict</span><span class="what">The verdict stores score ± band, the full evidence ledger, per-rung validity statements, flags (including <code>HUMAN_REVIEW_REQUIRED</code> when a known-good anchor scores below the floor), the cheapest-next-test recommendation, runtime, config hash and versions.</span></div>
       <div class="wire-row"><span class="n">07</span><span class="who">service → clients</span><span class="what">Job flips to <code>done</code>; webhook fires if registered. Every open dashboard tab picks the run up on its next poll — no reload.</span></div>
       <div class="wire-row loop"><span class="n">⟲</span><span class="who">reality → harness</span><span class="what">Days or weeks later, real outcomes land via <code>POST /ground-truth</code>. The harness re-scores what every cheap rung <em>had predicted</em> for those artifacts, updates per-cell correlations, raises drift alarms, and adjusts fusion weights — with an append-only audit trail. The system learns how much to trust itself.</span></div>
+    </div>
+  </div>
+
+  <div class="rm-section">
+    <h2>The integration contract — JSON over HTTPS</h2>
+    <div class="sub">three calls: submit → collect → report outcomes · every field means something</div>
+
+    <div class="rm-step-h"><span class="api-verb">POST</span> /evaluate — submit an artifact</div>
+    <div class="rm-note">One JSON body. Binary creatives (.png/.jpg) go through <span class="mono" style="font-size:12px">POST /artifacts</span> first (multipart upload), then reference the returned id here instead of <span class="mono" style="font-size:12px">text</span>.</div>
+    <div class="rm-code">{
+  "artifact_id": "summer-hero-01",        <span class="c">// optional — auto-generated if omitted. Use YOUR id: real</span>
+                                          <span class="c">// outcomes are joined back by this key later</span>
+  "modality": "text",                     <span class="c">// "text" | "image"</span>
+  "text": "Meet your new favorite running shoes. Free shipping. Shop now.",
+  "segment": "gen-z-us",                  <span class="c">// audience segment — scopes which calibration records apply;</span>
+                                          <span class="c">// trust earned on one segment never transfers silently</span>
+  "platform": "meta",                     <span class="c">// free-form platform tag</span>
+  "profile": "banner-web-v1",             <span class="c">// which criteria set judges this artifact class</span>
+                                          <span class="c">// (gate rules, thresholds, rubric, outcome corpus). Default if omitted</span>
+  "metadata": {"campaign": "q3-launch"},  <span class="c">// free-form passthrough, stored with the verdict</span>
+  "webhook_url": "https://you.example/cb" <span class="c">// optional — POSTed {job_id, status, verdict_id} on completion</span>
+}
+<span class="c">// → immediately returns</span> <span class="hl">{"job_id": "job-a1b2c3", "status": "queued"}</span></div>
+
+    <div class="rm-step-h"><span class="api-verb">GET</span> /jobs/{job_id} → /verdict/{verdict_id} — collect the verdict</div>
+    <div class="rm-note">Poll the job (evaluations take ~0.3–2s; states are a durable machine: <span class="mono" style="font-size:12px">queued → running → done | error | interrupted</span>) or wait for the webhook, then fetch the verdict — the output contract:</div>
+    <div class="rm-code">{
+  "id": "v-7fc716df", "artifact_id": "summer-hero-01",
+  "eliminated": false,                    <span class="c">// true ⇒ a rung killed it; more expensive rungs never ran</span>
+  "eliminated_by": null,                  <span class="c">// which rung, e.g. "deterministic_gate" — evidence says exactly why</span>
+  "score": 0.842,                         <span class="c">// calibration-WEIGHTED fusion, 0..1 — weights are measured</span>
+                                          <span class="c">// correlations with real outcomes, never opinions</span>
+  "band": [0.46, 1.0],                    <span class="c">// the honesty interval — wide = thin or weakly-validated evidence.</span>
+                                          <span class="c">// Gate launches on the LOWER edge, not the point score</span>
+  "confidence_note": "Calibration-weighted fusion of performance_predictor
+      (weight 0.98), judge_ensemble (weight 0.42)...",  <span class="c">// or "DIRECTIONAL ONLY" when nothing is calibrated</span>
+  "flags": [],                            <span class="c">// e.g. HUMAN_REVIEW_REQUIRED (known-good ad scored below floor),</span>
+                                          <span class="c">// degraded_provider (keyless comparator served)</span>
+  "validity_summary": "performance_predictor: Validated for segment='gen-z-us',
+      modality='text': Spearman r=0.91 vs ctr (n=144)...",  <span class="c">// the verdict citing its credentials —</span>
+                                          <span class="c">// and volunteering where it has none</span>
+  "next_test": {                          <span class="c">// what limits confidence + the cheapest way to fix it</span>
+    "kind": "human_pretest", "estimated_cost_usd": 400, "rationale": "..." },
+  "rung_results": [ <span class="c">/* every rung: score, passed, confidence, validity, evidence */</span> ],
+  "evidence": [ <span class="c">/* the full ledger: every check, comparison, prediction — nothing unexplained */</span> ],
+  "config_hash": "41fc701c0c06c031",      <span class="c">// exact criteria that produced this number — replayable</span>
+  "seed": 7, "runtime_ms": 701
+}</div>
+    <ul class="read-rules">
+      <li><strong>How a machine reads it, in four rules:</strong> <code>eliminated</code> → reject, evidence says why · compare <code>band[0]</code> (not <code>score</code>) against your launch bar · <code>HUMAN_REVIEW_REQUIRED</code> in flags → route to a person, never auto-decide · <code>DIRECTIONAL ONLY</code> in the note → advisory signal, don't gate on it.</li>
+    </ul>
+
+    <div class="rm-step-h"><span class="api-verb">POST</span> /ground-truth — report reality (the call most integrators forget)</div>
+    <div class="rm-code">{"records": [{"artifact_ref": "summer-hero-01",  <span class="c">// the id you evaluated with — this is the join key</span>
+              "modality": "text", "segment": "gen-z-us",
+              "outcomes": {"ctr": 0.043}}]}       <span class="c">// what actually happened when it ran</span>
+<span class="c">// → recalibrates every affected rung: correlations re-measured, drift alarms raised,</span>
+<span class="c">//   fusion weights adjusted. This call is what keeps every future verdict honest.</span></div>
+
+    <div class="rm-step-h" style="margin-top:40px">How agents and automated systems will talk to it — MCP <span class="badge warn">PLANNED · v0.2</span></div>
+    <div class="rm-note">MCP is not a second pipeline — it wraps the same engine as native tools so agent frameworks (Claude agents, LangGraph nodes, n8n) call the gate without HTTP glue. An autonomous creative pipeline replaces its internal critic with these five tools; the REST contract above does the identical job today.</div>
+    <div class="wire" style="margin-top:14px">
+      <div class="wire-row"><span class="n">T1</span><span class="who">evaluate_artifact</span><span class="what">text or artifact ref + profile + segment → verdict summary in <em>one</em> round-trip (<code>eliminated</code>, <code>score</code>, <code>band</code>, <code>flags</code>, <code>next_test</code>) — no polling; agents want a single call.</span></div>
+      <div class="wire-row"><span class="n">T2</span><span class="who">get_verdict</span><span class="what">full document — evidence ledger and validity statements — when the agent must explain or defend a decision.</span></div>
+      <div class="wire-row"><span class="n">T3</span><span class="who">report_outcome</span><span class="what">artifact ref + metric + value → recalibration summary. The agent closes the trust loop itself.</span></div>
+      <div class="wire-row"><span class="n">T4</span><span class="who">get_rung_validity</span><span class="what">"how much should I trust you?" — the calibration report as a tool, so an agent can check credentials before acting.</span></div>
+      <div class="wire-row"><span class="n">T5</span><span class="who">plan_live_test</span><span class="what">(v0.3) funnel survivors + budget constraints → experiment spec with funnel scores as bandit priors.</span></div>
+      <div class="wire-row loop"><span class="n">⟲</span><span class="who">the agent loop</span><span class="what">generate variants → <code>evaluate_artifact</code> each → eliminated ⇒ regenerate using the evidence as repair instructions ("banned phrase 'guaranteed results'") · survivor ⇒ rank by band-lower-edge · flags ⇒ escalate to a human → launch top-N through the agent's own platform tooling (never ours) → days later <code>report_outcome</code> per variant → the gate is sharper on the agent's next run.</span></div>
     </div>
   </div>
 
